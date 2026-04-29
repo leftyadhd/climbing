@@ -32,12 +32,17 @@ const beginnerPath = [
   ...grouped.crag.slice(0, 1),
 ];
 
-const sections = [
-  { key: 'technique', label: '기술 · 무브', roman: 'I',  desc: '손과 발로 몸을 움직이는 법.' },
-  { key: 'gear',      label: '장비',        roman: 'II', desc: '생명줄이 되는 물건들.' },
-  { key: 'crag',      label: '암장',        roman: 'III',desc: '전국의 바위들. 접근과 루트.' },
-  { key: 'guide',     label: '가이드',      roman: 'IV', desc: '입문, 안전, 그리고 문화.' },
-] as const;
+const typeKo: Record<string, string> = {
+  guide: '가이드', gear: '장비', technique: '기술', crag: '암장',
+};
+
+type SectionKey = 'technique' | 'gear' | 'crag' | 'guide';
+const sections: { key: SectionKey; label: string; roman: string; desc: string }[] = [
+  { key: 'technique', label: '기술 · 무브', roman: 'I',   desc: '손과 발로 몸을 움직이는 법.' },
+  { key: 'gear',      label: '장비',        roman: 'II',  desc: '생명줄이 되는 물건들.' },
+  { key: 'crag',      label: '암장',        roman: 'III', desc: '전국의 바위들. 접근과 루트.' },
+  { key: 'guide',     label: '가이드',      roman: 'IV',  desc: '입문, 안전, 그리고 문화.' },
+];
 ---
 <BaseLayout title="위키">
 <div class="container">
@@ -57,9 +62,7 @@ const sections = [
         처음 시작한다면 이 순서로
       </div>
       <div class="path-steps">
-        {beginnerPath.map((entry, i) => {
-          const typeKo: Record<string, string> = { guide: '가이드', gear: '장비', technique: '기술', crag: '암장' };
-          return (
+        {beginnerPath.map((entry, i) => (
             <div class="path-step">
               {i > 0 && <span class="path-arrow">→</span>}
               <a href={`/wiki/${entry.slug}/`} class="path-card">
@@ -67,8 +70,7 @@ const sections = [
                 <span class="path-title">{entry.data.title}</span>
               </a>
             </div>
-          );
-        })}
+        ))}
       </div>
     </section>
   )}
