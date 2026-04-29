@@ -1,0 +1,117 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const all = await getCollection('wiki');
+const grouped = {
+  crag: all.filter(e => e.data.type === 'crag'),
+  technique: all.filter(e => e.data.type === 'technique'),
+  gear: all.filter(e => e.data.type === 'gear'),
+  guide: all.filter(e => e.data.type === 'guide'),
+};
+const meta = {
+  crag: { label: '암장', roman: 'I', desc: '전국과 해외의 바위들. 접근로와 루트 정보.' },
+  technique: { label: '기술 · 무브', roman: 'II', desc: '손과 발로 몸을 움직이는 법.' },
+  gear: { label: '장비', roman: 'III', desc: '생명줄이 되는 물건들.' },
+  guide: { label: '가이드', roman: 'IV', desc: '입문과 안전, 그리고 문화.' },
+};
+---
+<BaseLayout title="위키">
+<div class="container">
+  <div class="eyebrow">The Wiki — 서가</div>
+  <h1>암벽을 배우는<br/><em style="font-style:italic; color:var(--ochre);">서가.</em></h1>
+  <p style="font-size:1.1rem; max-width:560px; color:var(--stone-700); margin-top:1.5rem;">
+    루트를 가기 전에 한 번, 다녀와서 다시 한 번. 위키는 기록장이 아니라 배움의 장소입니다.
+  </p>
+
+  <div class="meta" style="margin-top:2rem;">총 {all.length}개 문서 · 지속 확장 중</div>
+
+  <hr class="rule" />
+
+  {Object.entries(grouped).map(([type, items]) => items.length > 0 && (
+    <section class="wiki-section">
+      <div class="section-title">
+        <span class="roman">{meta[type as keyof typeof meta].roman}</span>
+        <div>
+          <h2>{meta[type as keyof typeof meta].label}</h2>
+          <div class="section-desc">{meta[type as keyof typeof meta].desc}</div>
+        </div>
+        <span class="count">{items.length.toString().padStart(2,'0')}</span>
+      </div>
+      <ul class="wiki-list">
+        {items.map(item => (
+          <li>
+            <a href={`/wiki/${item.slug}/`}>
+              <span class="wiki-item-title">{item.data.title}</span>
+              {item.data.summary && <span class="wiki-item-summary"> — {item.data.summary}</span>}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</div>
+
+<style>
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  .wiki-section { margin-top: 3.5rem; }
+  .section-title {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 1.5rem;
+    align-items: baseline;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--rule-strong);
+    margin-bottom: 1.5rem;
+  }
+  .roman {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.3rem;
+    color: var(--ochre);
+    letter-spacing: 0.05em;
+  }
+  .section-title h2 { margin: 0; font-size: 1.8rem; }
+  .section-desc {
+    font-size: 0.9rem;
+    color: var(--stone-700);
+    margin-top: 0.3rem;
+  }
+  .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--stone-500);
+    letter-spacing: 0.1em;
+  }
+  .wiki-list { list-style: none; margin: 0; padding: 0; }
+  .wiki-list li {
+    border-bottom: 1px solid var(--rule);
+    padding: 0.9rem 0;
+  }
+  .wiki-list li:last-child { border-bottom: none; }
+  .wiki-list a {
+    display: block;
+    border: none;
+    color: var(--ink);
+    transition: transform 0.15s;
+  }
+  .wiki-list a:hover {
+    color: var(--ochre);
+    transform: translateX(6px);
+  }
+  .wiki-item-title {
+    font-family: 'Fraunces', serif;
+    font-size: 1.2rem;
+    font-weight: 400;
+  }
+  .wiki-item-summary {
+    color: var(--stone-700);
+    font-size: 0.95rem;
+  }
+</style>
+</BaseLayout>

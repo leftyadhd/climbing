@@ -1,0 +1,36 @@
+---
+title: 연우지암 #1 — 삼성산 거북이릿지·전망대릿지
+date: 2026-03-29
+type: log
+crag: samseongsan
+partners: [연우지암]
+weather: 
+tags: [연우지암, 삼성산, 릿지, 거북이릿지, 전망대릿지, 서울]
+photos: []
+routes:
+  - name: 거북이릿지
+    style: multi-pitch
+    status: attempt
+    notes: 
+  - name: 전망대릿지
+    style: multi-pitch
+    status: attempt
+    notes: 
+---
+
+## 개요
+
+연우지암 등반 시리즈 **1회차**. 삼성산의 **거북이릿지**와 **전망대릿지** 연결 등반.
+
+## 루트
+
+- **거북이릿지**: 
+- **전망대릿지**: 
+
+## 배운 것 / 주목할 점
+
+- 
+
+## 메모
+
+

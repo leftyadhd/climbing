@@ -1,0 +1,218 @@
+{
+  "main": {
+    "id": "014464d9b68bedd9",
+    "type": "split",
+    "children": [
+      {
+        "id": "eddfc338c23684dd",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7a9f9e3a02df9430",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "logs/2025/2025-05-24-surisan-maebawi.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "2025-05-24-surisan-maebawi"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "83d03a22193a9f3d",
+    "type": "split",
+    "children": [
+      {
+        "id": "ad4b55831df49fba",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6cc06b59e4a52e9b",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "73f44241463e20fe",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "beffa3092d4e6e54",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "ae26376a35ae20e3",
+    "type": "split",
+    "children": [
+      {
+        "id": "33bd486bbf3d3113",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "dc43f8374ef6f24a",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "logs/2025/2025-05-24-surisan-maebawi.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for 2025-05-24-surisan-maebawi"
+            }
+          },
+          {
+            "id": "29ef713ef4de8b52",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "logs/2025/2025-05-24-surisan-maebawi.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from 2025-05-24-surisan-maebawi"
+            }
+          },
+          {
+            "id": "1ab3abb4032080da",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "fc52c1bd2f9938b0",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "7e50e2deeeaaaefd",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "logs/2025/2025-05-24-surisan-maebawi.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of 2025-05-24-surisan-maebawi"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "7a9f9e3a02df9430",
+  "lastOpenFiles": [
+    "wiki/climbing-all/04-techniques/heel-hook.md",
+    "wiki/climbing-all/06-crags/surisan-maebawi.md",
+    "wiki/climbing-all/06-crags/suraksan-naewon.md",
+    "wiki/climbing-all/06-crags/pandae-ice-park.md",
+    "wiki/climbing-all/06-crags/bukhansan-baegundae.md",
+    "logs/2026/2026-04-25-yeonwoojiam-4-insubong.md",
+    "logs/2026/2026-04-18-yeonwoojiam-3-suraksan-naewon.md",
+    "logs/2026/2026-04-18-seonunsan.md",
+    "logs/2026/2026-04-12-yeonwoojiam-2-samseongsan.md",
+    "logs/2026/2026-03-29-yeonwoojiam-1-samseongsan-ridges.md",
+    "logs/2026/2026-02-12-kolon-ice-pandae.md",
+    "logs/2026",
+    "logs/untitled folder",
+    "logs/2025/2025-05-11-jsg-school-week4-chouinard-b.md",
+    "logs/2025/2025-05-18-jsg-school-week5-ganhyeonam.md",
+    "logs/2025/2025-05-04-jsg-school-week3.md",
+    "logs/2025/2025-04-27-jsg-school-week2.md",
+    "logs/2025/2025-04-20-jsg-school-week1.md",
+    "logs/2025/2025-05-24-surisan-maebawi.md",
+    "logs/2025/2025-03-15-kolon-ridge-basic-59.md",
+    "logs/2025",
+    "logs/2026/2025-05-18-jsg-school-week5-ganhyeonam.md",
+    "logs/2026/2025-05-11-jsg-school-week4-chouinard-b.md",
+    "logs/2026/2025-05-04-jsg-school-week3.md",
+    "logs/2026/2025-04-27-jsg-school-week2.md",
+    "logs/2026/2025-04-20-jsg-school-week1.md",
+    "logs/2026/2025-03-24-surisan-maebawi.md",
+    "logs/2026/2025-03-15-kolon-ridge-basic-59.md",
+    "wiki/climbing-all/06-crags/seonunsan.md"
+  ]
+}

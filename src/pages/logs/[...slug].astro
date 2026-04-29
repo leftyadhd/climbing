@@ -1,0 +1,263 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const logs = await getCollection('logs');
+  return logs.map(log => ({
+    params: { slug: log.slug },
+    props: { log },
+  }));
+}
+
+const { log } = Astro.props;
+const { Content } = await log.render();
+
+const allWiki = await getCollection('wiki');
+const cragEntry = log.data.crag
+  ? allWiki.find(w => w.data.type === 'crag' && w.slug.endsWith(log.data.crag!))
+  : null;
+
+const statusLabel: Record<string, string> = {
+  onsight: 'Onsight',
+  flash: 'Flash',
+  redpoint: 'Redpoint',
+  send: 'Send',
+  projecting: 'Projecting',
+  attempt: 'Attempt',
+  failed: 'Failed',
+};
+const statusClass: Record<string, string> = {
+  onsight: 'send',
+  flash: 'send',
+  redpoint: 'send',
+  send: 'send',
+  projecting: 'project',
+  attempt: 'project',
+  failed: 'fail',
+};
+---
+<BaseLayout title={log.data.title}>
+<article data-pagefind-body>
+<div class="container">
+
+  <div class="doc-meta">
+    <a href="/logs/">← Logs</a>
+    <span class="dot">·</span>
+    <span>{log.data.date.toISOString().slice(0,10)}</span>
+    {cragEntry && (
+      <>
+        <span class="dot">·</span>
+        <a href={`/wiki/${cragEntry.slug}/`}>{cragEntry.data.title}</a>
+      </>
+    )}
+  </div>
+
+  <h1>{log.data.title}</h1>
+
+  <!-- 세션 데이터 박스 -->
+  <div class="session-box">
+    <div class="session-row">
+      <span class="session-label">Date</span>
+      <span class="mono">{log.data.date.toISOString().slice(0,10)}</span>
+    </div>
+    {log.data.crag && (
+      <div class="session-row">
+        <span class="session-label">Crag</span>
+        <span>{cragEntry ? <a href={`/wiki/${cragEntry.slug}/`}>{cragEntry.data.title}</a> : log.data.crag}</span>
+      </div>
+    )}
+    {log.data.weather && (
+      <div class="session-row">
+        <span class="session-label">Conditions</span>
+        <span>{log.data.weather}</span>
+      </div>
+    )}
+    {log.data.partners.length > 0 && (
+      <div class="session-row">
+        <span class="session-label">Partners</span>
+        <span>{log.data.partners.join(', ')}</span>
+      </div>
+    )}
+  </div>
+
+  {log.data.tags.length > 0 && (
+    <div class="tags">
+      {log.data.tags.map(t => <span class="tag">{t}</span>)}
+    </div>
+  )}
+
+  <!-- 루트 테이블 -->
+  {log.data.routes.length > 0 && (
+    <section class="routes-section">
+      <div class="eyebrow" style="margin-top:3rem;">Routes — 시도한 루트</div>
+      <table class="routes-table">
+        <thead>
+          <tr>
+            <th>Route</th>
+            <th class="col-grade">Grade</th>
+            <th class="col-status">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {log.data.routes.map(r => (
+            <tr>
+              <td>
+                <div class="route-name">{r.name}</div>
+                {r.notes && <div class="route-notes">{r.notes}</div>}
+                {r.techniques_used.length > 0 && (
+                  <div class="route-techniques">
+                    Used: {r.techniques_used.map(t => (
+                      <a href={`/wiki/climbing-all/04-techniques/${t}/`}>{t}</a>
+                    ))}
+                  </div>
+                )}
+              </td>
+              <td class="col-grade mono">{r.grade || '—'}</td>
+              <td class="col-status">
+                <span class={`status-chip status-${statusClass[r.status]}`}>
+                  {statusLabel[r.status]}
+                </span>
+                {r.attempts && <div class="attempts">{r.attempts} tries</div>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )}
+
+  <hr class="rule" />
+
+  <div class="prose">
+    <Content />
+  </div>
+
+</div>
+</article>
+
+<style>
+  .doc-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    margin-bottom: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em;
+    align-items: center;
+  }
+  .doc-meta a { border: none; color: var(--stone-700); }
+  .doc-meta a:hover { color: var(--ochre); }
+  .doc-meta .dot { opacity: 0.5; }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    margin-bottom: 1.5rem;
+  }
+
+  .session-box {
+    background: var(--paper-soft);
+    border: 1px solid var(--rule);
+    padding: 1.2rem 1.5rem;
+    margin: 2rem 0;
+    font-size: 0.9rem;
+  }
+  .session-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--rule);
+    gap: 1rem;
+  }
+  .session-row:last-child { border-bottom: none; }
+  .session-row a { border: none; color: var(--ochre); border-bottom: 1px solid var(--rule-strong); }
+  .session-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    padding-top: 2px;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .routes-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 2rem;
+    font-size: 0.95rem;
+  }
+  .routes-table th {
+    text-align: left;
+    padding: 0.8rem 0.5rem;
+    border-bottom: 1px solid var(--rule-strong);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    font-weight: 500;
+  }
+  .routes-table td {
+    padding: 1rem 0.5rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .col-grade { width: 90px; color: var(--stone-700); }
+  .col-status { width: 140px; text-align: right; }
+  .route-name {
+    font-family: 'Fraunces', serif;
+    font-size: 1.1rem;
+  }
+  .route-notes {
+    font-size: 0.85rem;
+    color: var(--stone-700);
+    margin-top: 0.3rem;
+    line-height: 1.5;
+  }
+  .route-techniques {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--stone-500);
+    margin-top: 0.5rem;
+    letter-spacing: 0.03em;
+  }
+  .route-techniques a {
+    border: none;
+    color: var(--stone-700);
+    border-bottom: 1px dashed var(--rule-strong);
+    margin-right: 0.5em;
+  }
+  .route-techniques a:hover { color: var(--ochre); border-bottom-color: var(--ochre); }
+
+  .status-chip {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.25em 0.7em;
+    border: 1px solid;
+  }
+  .status-send { color: var(--moss); border-color: var(--moss); }
+  .status-project { color: var(--ochre); border-color: var(--ochre); }
+  .status-fail { color: var(--stone-500); border-color: var(--stone-500); }
+  .attempts {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--stone-500);
+    margin-top: 0.3rem;
+  }
+
+  @media (max-width: 640px) {
+    .session-row { grid-template-columns: 1fr; gap: 0.2rem; padding: 0.6rem 0; }
+    .routes-table { font-size: 0.85rem; }
+    .routes-table th, .routes-table td { padding: 0.6rem 0.3rem; }
+    .col-grade { width: 60px; }
+    .col-status { width: 100px; }
+  }
+</style>
+</BaseLayout>

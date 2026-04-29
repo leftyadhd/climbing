@@ -1,0 +1,281 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('wiki');
+  return entries.map(entry => ({
+    params: { slug: entry.slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+
+const cragSlug = entry.slug.split('/').pop();
+const allLogs = await getCollection('logs');
+
+let relatedLogs: typeof allLogs = [];
+if (entry.data.type === 'crag') {
+  relatedLogs = allLogs.filter(l => l.data.crag === cragSlug);
+} else if (entry.data.type === 'technique') {
+  relatedLogs = allLogs.filter(l =>
+    l.data.routes.some(r => r.techniques_used.includes(cragSlug!))
+  );
+}
+relatedLogs.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+const typeLabel: Record<string, string> = {
+  crag: '암장',
+  technique: '기술',
+  gear: '장비',
+  guide: '가이드',
+  route: '루트',
+  term: '용어',
+};
+---
+<BaseLayout title={entry.data.title} description={entry.data.summary}>
+<article data-pagefind-body>
+<div class="container">
+
+  <div class="doc-meta">
+    <a href="/wiki/">← Wiki</a>
+    <span class="dot">·</span>
+    <span class="doc-type">{typeLabel[entry.data.type]}</span>
+    {entry.data.updated && (
+      <>
+        <span class="dot">·</span>
+        <span>Updated {entry.data.updated.toISOString().slice(0,10)}</span>
+      </>
+    )}
+  </div>
+
+  <h1>{entry.data.title}</h1>
+
+  {entry.data.summary && (
+    <p class="summary">{entry.data.summary}</p>
+  )}
+
+  <!-- crag 전용 데이터 박스 -->
+  {entry.data.type === 'crag' && entry.data.location && (
+    <div class="data-box">
+      <div class="data-row">
+        <span class="data-label">위치</span>
+        <span>{entry.data.location.region} {entry.data.location.city && `— ${entry.data.location.city}`}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">좌표</span>
+        <span class="mono">{entry.data.location.lat}°, {entry.data.location.lng}°</span>
+      </div>
+      {entry.data.rock_type && (
+        <div class="data-row">
+          <span class="data-label">암질</span>
+          <span>{entry.data.rock_type}</span>
+        </div>
+      )}
+      {entry.data.disciplines.length > 0 && (
+        <div class="data-row">
+          <span class="data-label">종류</span>
+          <span>{entry.data.disciplines.join(' · ')}</span>
+        </div>
+      )}
+      {entry.data.approach_minutes && (
+        <div class="data-row">
+          <span class="data-label">접근</span>
+          <span>{entry.data.approach_minutes}분</span>
+        </div>
+      )}
+      {entry.data.routes_count && (
+        <div class="data-row">
+          <span class="data-label">루트 수</span>
+          <span>약 {entry.data.routes_count}개</span>
+        </div>
+      )}
+      {entry.data.season_best.length > 0 && (
+        <div class="data-row">
+          <span class="data-label">시즌</span>
+          <span>{entry.data.season_best.join(' · ')}</span>
+        </div>
+      )}
+    </div>
+  )}
+
+  <!-- technique 전용 -->
+  {entry.data.type === 'technique' && (
+    <div class="data-box">
+      {entry.data.difficulty_level && (
+        <div class="data-row">
+          <span class="data-label">난이도</span>
+          <span>{entry.data.difficulty_level}</span>
+        </div>
+      )}
+      {entry.data.common_on.length > 0 && (
+        <div class="data-row">
+          <span class="data-label">주 사용처</span>
+          <span>{entry.data.common_on.join(' · ')}</span>
+        </div>
+      )}
+    </div>
+  )}
+
+  <!-- gear 전용 -->
+  {entry.data.type === 'gear' && (
+    <div class="data-box">
+      {entry.data.brand && (
+        <div class="data-row">
+          <span class="data-label">브랜드</span>
+          <span>{entry.data.brand}</span>
+        </div>
+      )}
+      {entry.data.gear_category && (
+        <div class="data-row">
+          <span class="data-label">분류</span>
+          <span>{entry.data.gear_category}</span>
+        </div>
+      )}
+      {entry.data.price_krw && (
+        <div class="data-row">
+          <span class="data-label">가격</span>
+          <span class="mono">₩ {entry.data.price_krw.toLocaleString()}</span>
+        </div>
+      )}
+    </div>
+  )}
+
+  {entry.data.tags.length > 0 && (
+    <div class="tags">
+      {entry.data.tags.map(t => <span class="tag">{t}</span>)}
+    </div>
+  )}
+
+  <hr class="rule" />
+
+  <div class="prose">
+    <Content />
+  </div>
+
+  {relatedLogs.length > 0 && (
+    <section class="related">
+      <hr class="rule-ornate" />
+      <div class="eyebrow">Connected — 관련 기록</div>
+      <h2 style="margin-top:0.5rem;">이 {typeLabel[entry.data.type]}과 함께한 날들</h2>
+      <ul class="related-list">
+        {relatedLogs.map(log => (
+          <li>
+            <a href={`/logs/${log.slug}/`}>
+              <span class="related-date">{log.data.date.toISOString().slice(0,10)}</span>
+              <span class="related-title">{log.data.title}</span>
+              {log.data.weather && <span class="related-weather">{log.data.weather}</span>}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</div>
+</article>
+
+<style>
+  .doc-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    margin-bottom: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em;
+    align-items: center;
+  }
+  .doc-meta a { border: none; color: var(--stone-700); }
+  .doc-meta a:hover { color: var(--ochre); }
+  .doc-meta .dot { opacity: 0.5; }
+  .doc-type { color: var(--ochre); }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    margin-bottom: 1rem;
+  }
+  .summary {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.35rem;
+    line-height: 1.4;
+    color: var(--stone-900);
+    margin: 1rem 0 2rem;
+    max-width: 640px;
+  }
+
+  .data-box {
+    background: var(--paper-soft);
+    border: 1px solid var(--rule);
+    padding: 1.2rem 1.5rem;
+    margin: 2rem 0;
+    font-size: 0.9rem;
+  }
+  .data-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--rule);
+    gap: 1rem;
+  }
+  .data-row:last-child { border-bottom: none; }
+  .data-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    padding-top: 2px;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .related {
+    margin-top: 4rem;
+  }
+  .related-list {
+    list-style: none;
+    padding: 0;
+    margin: 1.5rem 0 0;
+  }
+  .related-list li {
+    border-bottom: 1px solid var(--rule);
+  }
+  .related-list li:first-child {
+    border-top: 1px solid var(--rule);
+  }
+  .related-list a {
+    display: grid;
+    grid-template-columns: 110px 1fr auto;
+    gap: 1rem;
+    padding: 1rem 0;
+    border: none;
+    color: var(--ink);
+    align-items: baseline;
+    transition: background 0.15s;
+  }
+  .related-list a:hover { background: color-mix(in srgb, var(--ochre) 5%, transparent); color: var(--ink); }
+  .related-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--stone-500);
+  }
+  .related-title {
+    font-family: 'Fraunces', serif;
+    font-size: 1.1rem;
+  }
+  .related-weather {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--stone-500);
+  }
+
+  @media (max-width: 640px) {
+    .data-row { grid-template-columns: 1fr; gap: 0.2rem; padding: 0.6rem 0; }
+    .related-list a { grid-template-columns: 1fr; gap: 0.3rem; padding: 0.8rem 0; }
+  }
+</style>
+</BaseLayout>

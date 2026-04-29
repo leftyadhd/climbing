@@ -1,0 +1,160 @@
+backend:
+  name: git-gateway
+  branch: main
+
+media_folder: "public/uploads"
+public_folder: "/uploads"
+
+locale: 'ko'
+
+collections:
+  # 등반로그 - 세션 단위 기록
+  - name: "logs"
+    label: "등반로그"
+    folder: "src/content/logs"
+    create: true
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    path: "{{year}}/{{year}}-{{month}}-{{day}}-{{slug}}"
+    fields:
+      - { label: "제목", name: "title", widget: "string" }
+      - { label: "날짜", name: "date", widget: "datetime", format: "YYYY-MM-DD", date_format: "YYYY-MM-DD", time_format: false }
+      - { label: "암장", name: "crag", widget: "string", required: false, hint: "위키 crag 문서 slug (예: seonunsan)" }
+      - { label: "파트너", name: "partners", widget: "list", required: false }
+      - { label: "날씨", name: "weather", widget: "string", required: false }
+      - label: "태그"
+        name: "tags"
+        widget: "list"
+        required: false
+      - label: "사진"
+        name: "photos"
+        widget: "list"
+        required: false
+        field: { label: "사진", name: "photo", widget: "image" }
+      - label: "시도한 루트"
+        name: "routes"
+        widget: "list"
+        required: false
+        fields:
+          - { label: "루트명", name: "name", widget: "string" }
+          - { label: "등급", name: "grade", widget: "string", required: false }
+          - label: "스타일"
+            name: "style"
+            widget: "select"
+            required: false
+            options: ["sport", "trad", "boulder", "top-rope", "multi-pitch"]
+          - label: "상태"
+            name: "status"
+            widget: "select"
+            options: ["onsight", "flash", "redpoint", "send", "projecting", "attempt", "failed"]
+          - { label: "시도 횟수", name: "attempts", widget: "number", required: false }
+          - { label: "사용한 기술", name: "techniques_used", widget: "list", required: false, hint: "위키 technique slug" }
+          - { label: "메모", name: "notes", widget: "text", required: false }
+      - { label: "본문", name: "body", widget: "markdown" }
+
+  # 위키 - 암장
+  - name: "wiki-crags"
+    label: "위키 / 암장"
+    folder: "src/content/wiki/climbing-all/06-crags"
+    create: true
+    slug: "{{slug}}"
+    fields:
+      - { label: "제목", name: "title", widget: "string" }
+      - { label: "타입", name: "type", widget: "hidden", default: "crag" }
+      - label: "위치"
+        name: "location"
+        widget: "object"
+        fields:
+          - { label: "지역(시도)", name: "region", widget: "string" }
+          - { label: "도시", name: "city", widget: "string", required: false }
+          - { label: "위도", name: "lat", widget: "number", value_type: "float" }
+          - { label: "경도", name: "lng", widget: "number", value_type: "float" }
+      - { label: "바위 종류", name: "rock_type", widget: "string", required: false }
+      - label: "등반 종류"
+        name: "disciplines"
+        widget: "list"
+        required: false
+      - { label: "접근시간(분)", name: "approach_minutes", widget: "number", required: false }
+      - { label: "루트 수", name: "routes_count", widget: "number", required: false }
+      - label: "추천 계절"
+        name: "season_best"
+        widget: "list"
+        required: false
+      - label: "태그"
+        name: "tags"
+        widget: "list"
+        required: false
+      - { label: "요약", name: "summary", widget: "text", required: false }
+      - { label: "본문", name: "body", widget: "markdown" }
+
+  # 위키 - 기술
+  - name: "wiki-techniques"
+    label: "위키 / 기술·무브"
+    folder: "src/content/wiki/climbing-all/04-techniques"
+    create: true
+    slug: "{{slug}}"
+    fields:
+      - { label: "제목", name: "title", widget: "string" }
+      - { label: "타입", name: "type", widget: "hidden", default: "technique" }
+      - label: "난이도"
+        name: "difficulty_level"
+        widget: "select"
+        options: ["beginner", "intermediate", "advanced"]
+      - label: "관련 기술"
+        name: "related_techniques"
+        widget: "list"
+        required: false
+      - label: "주로 쓰이는 상황"
+        name: "common_on"
+        widget: "list"
+        required: false
+        hint: "overhang, slab, crack 등"
+      - label: "태그"
+        name: "tags"
+        widget: "list"
+        required: false
+      - { label: "요약", name: "summary", widget: "text", required: false }
+      - { label: "본문", name: "body", widget: "markdown" }
+
+  # 위키 - 장비
+  - name: "wiki-gear"
+    label: "위키 / 장비"
+    folder: "src/content/wiki/climbing-all/03-gear"
+    create: true
+    slug: "{{slug}}"
+    fields:
+      - { label: "제목", name: "title", widget: "string" }
+      - { label: "타입", name: "type", widget: "hidden", default: "gear" }
+      - { label: "장비 분류", name: "gear_category", widget: "string" }
+      - { label: "브랜드", name: "brand", widget: "string", required: false }
+      - { label: "가격(원)", name: "price_krw", widget: "number", required: false }
+      - label: "용도"
+        name: "use_cases"
+        widget: "list"
+        required: false
+      - label: "태그"
+        name: "tags"
+        widget: "list"
+        required: false
+      - { label: "요약", name: "summary", widget: "text", required: false }
+      - { label: "본문", name: "body", widget: "markdown" }
+
+  # 위키 - 일반 가이드 (입문, 종류, 안전, 커뮤니티 등)
+  - name: "wiki-guides"
+    label: "위키 / 일반 가이드"
+    files:
+      - label: "입문 - 클라이밍이란?"
+        name: "what-is-climbing"
+        file: "src/content/wiki/climbing-all/01-getting-started/what-is-climbing.md"
+        fields:
+          - { label: "제목", name: "title", widget: "string" }
+          - { label: "타입", name: "type", widget: "hidden", default: "guide" }
+          - { label: "태그", name: "tags", widget: "list", required: false }
+          - { label: "본문", name: "body", widget: "markdown" }
+      - label: "입문 - 초보자 가이드"
+        name: "beginner-guide"
+        file: "src/content/wiki/climbing-all/01-getting-started/beginner-guide.md"
+        fields:
+          - { label: "제목", name: "title", widget: "string" }
+          - { label: "타입", name: "type", widget: "hidden", default: "guide" }
+          - { label: "태그", name: "tags", widget: "list", required: false }
+          - { label: "본문", name: "body", widget: "markdown" }
