@@ -61,7 +61,7 @@ const logs = defineCollection({
     type: z.literal('log').default('log'),
     crag: z.string().optional(),        // 위키 crag 문서 slug 참조
     partners: z.array(z.string()).default([]),
-    weather: z.string().optional(),
+    weather: z.string().nullish(),
     tags: z.array(z.string()).default([]),
     photos: z.array(z.string()).default([]),
     // 이 세션에서 시도한 루트들
