@@ -59,7 +59,7 @@ const logs = defineCollection({
     title: z.string(),
     date: z.date(),
     type: z.literal('log').default('log'),
-    crag: z.string().optional(),        // 위키 crag 문서 slug 참조
+    crag: z.string().nullish(),           // 위키 crag 문서 slug 참조
     partners: z.array(z.string()).default([]),
     weather: z.string().nullish(),
     tags: z.array(z.string()).default([]),
@@ -67,12 +67,12 @@ const logs = defineCollection({
     // 이 세션에서 시도한 루트들
     routes: z.array(z.object({
       name: z.string(),
-      grade: z.string().optional(),
-      style: z.string().optional(),
+      grade: z.string().nullish(),
+      style: z.string().nullish(),
       status: z.enum(['onsight', 'flash', 'redpoint', 'send', 'projecting', 'attempt', 'failed']),
       attempts: z.number().optional(),
       techniques_used: z.array(z.string()).default([]), // 위키 technique slug 참조
-      notes: z.string().optional(),
+      notes: z.string().nullish(),
     })).default([]),
   }),
 });
