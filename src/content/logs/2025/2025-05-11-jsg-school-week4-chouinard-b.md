@@ -9,7 +9,7 @@ tags: [강습, 정승권등산학교, 북한산, 인수봉, 취나드B, 멀티�
 photos: []
 routes:
   - name: 취나드 B
-    grade: 5.8
+    grade: "5.8"
     style: trad
     status: attempt
     notes: 이본 쉬나드가 1960년대 개척한 인수봉 클래식 라인
