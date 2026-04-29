@@ -20,8 +20,6 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hahmlet:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
-<link href="/pagefind/pagefind-ui.css" rel="stylesheet" />
-<script src="/pagefind/pagefind-ui.js" is:inline></script>
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js" is:inline></script>
 
 <style is:global>
@@ -119,7 +117,7 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
     margin: 0 auto;
     padding: 1.25rem 2rem;
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr;
     align-items: center;
     gap: 2rem;
   }
@@ -162,22 +160,6 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
   }
   .nav-links a:hover { color: var(--ink); border-bottom-color: var(--ochre); }
 
-  .search-box { width: 260px; }
-
-  .pagefind-ui {
-    --pagefind-ui-primary: var(--ink);
-    --pagefind-ui-text: var(--ink);
-    --pagefind-ui-background: var(--paper-soft);
-    --pagefind-ui-border: var(--rule-strong);
-    --pagefind-ui-tag: var(--stone-200);
-    --pagefind-ui-border-width: 1px;
-    --pagefind-ui-border-radius: 2px;
-    --pagefind-ui-font: Pretendard, sans-serif;
-  }
-  .pagefind-ui__search-input {
-    font-size: 0.85rem !important;
-    padding: 0.5rem 0.75rem !important;
-  }
 
   main { position: relative; z-index: 2; }
   .container {
@@ -294,7 +276,6 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
 
   @media (max-width: 720px) {
     .masthead-inner { grid-template-columns: 1fr; gap: 1rem; }
-    .search-box { width: 100%; }
     .nav-links { flex-wrap: wrap; gap: 1rem; }
     .container, .container-wide { padding: 2.5rem 1.25rem 4rem; }
   }
@@ -310,7 +291,6 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
       <a href="/logs/">Logs</a>
       <a href="/admin/" target="_blank">Admin</a>
     </nav>
-    <div class="search-box"><div id="search"></div></div>
   </div>
 </header>
 
@@ -324,11 +304,6 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
 </footer>
 
 <script is:inline>
-  window.addEventListener('DOMContentLoaded', () => {
-    if (window.PagefindUI) {
-      new PagefindUI({ element: '#search', showSubResults: true, showImages: false, placeholder: 'Search…' });
-    }
-  });
   if (window.netlifyIdentity) {
     window.netlifyIdentity.on("init", user => {
       if (!user) {
