@@ -16,7 +16,9 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hahmlet:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
 <link href="/pagefind/pagefind-ui.css" rel="stylesheet" />
 <script src="/pagefind/pagefind-ui.js" is:inline></script>
@@ -24,26 +26,26 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
 
 <style is:global>
   :root {
-    --ink: #1a1815;
+    --ink: #18160f;
     --ink-soft: #2d2a24;
     --stone-900: #3a3731;
     --stone-700: #5c5850;
     --stone-500: #8a857a;
     --stone-300: #c4beb0;
     --stone-200: #d9d3c4;
-    --stone-100: #ebe6d8;
-    --paper: #f4efe1;
-    --paper-soft: #eae4d3;
-    --moss: #4a5d3a;
-    --moss-dark: #2d3a22;
-    --ochre: #a85a2a;
-    --rule: rgba(26, 24, 21, 0.15);
-    --rule-strong: rgba(26, 24, 21, 0.35);
+    --stone-100: #ece7d8;
+    --paper: #f5f0e8;
+    --paper-soft: #ece7d5;
+    --moss: #3d5c2e;
+    --moss-dark: #263d1e;
+    --ochre: #c0440e;
+    --rule: rgba(24, 22, 15, 0.12);
+    --rule-strong: rgba(24, 22, 15, 0.28);
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
-      --ink: #ebe6d8;
+      --ink: #ece7d5;
       --ink-soft: #d9d3c4;
       --stone-900: #c4beb0;
       --stone-700: #a39e8f;
@@ -51,13 +53,13 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
       --stone-300: #4a463f;
       --stone-200: #3a3731;
       --stone-100: #2d2a24;
-      --paper: #1a1815;
-      --paper-soft: #221f1a;
+      --paper: #18160f;
+      --paper-soft: #201e17;
       --moss: #8ea775;
       --moss-dark: #a8c290;
-      --ochre: #d48a5a;
-      --rule: rgba(235, 230, 216, 0.15);
-      --rule-strong: rgba(235, 230, 216, 0.35);
+      --ochre: #e06030;
+      --rule: rgba(236, 231, 213, 0.12);
+      --rule-strong: rgba(236, 231, 213, 0.28);
     }
   }
 
@@ -65,7 +67,7 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
   html { scroll-behavior: smooth; }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
     color: var(--ink);
     background: var(--paper);
     background-image:
@@ -95,7 +97,7 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
   a:hover { border-bottom-color: var(--ochre); color: var(--ochre); }
 
   h1, h2, h3, h4 {
-    font-family: 'Fraunces', 'Noto Serif KR', Georgia, serif;
+    font-family: 'Fraunces', 'Hahmlet', Georgia, serif;
     font-weight: 400;
     letter-spacing: -0.02em;
     line-height: 1.15;
@@ -145,7 +147,7 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
   .nav-links {
     display: flex;
     gap: 2rem;
-    font-family: 'Inter', sans-serif;
+    font-family: Pretendard, sans-serif;
     font-size: 0.82rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -170,7 +172,7 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
     --pagefind-ui-tag: var(--stone-200);
     --pagefind-ui-border-width: 1px;
     --pagefind-ui-border-radius: 2px;
-    --pagefind-ui-font: 'Inter', sans-serif;
+    --pagefind-ui-font: Pretendard, sans-serif;
   }
   .pagefind-ui__search-input {
     font-size: 0.85rem !important;

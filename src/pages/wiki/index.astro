@@ -4,114 +4,322 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 const all = await getCollection('wiki');
 const grouped = {
-  crag: all.filter(e => e.data.type === 'crag'),
+  guide:     all.filter(e => e.data.type === 'guide'),
   technique: all.filter(e => e.data.type === 'technique'),
-  gear: all.filter(e => e.data.type === 'gear'),
-  guide: all.filter(e => e.data.type === 'guide'),
+  gear:      all.filter(e => e.data.type === 'gear'),
+  crag:      all.filter(e => e.data.type === 'crag'),
 };
-const meta = {
-  crag: { label: '암장', roman: 'I', desc: '전국과 해외의 바위들. 접근로와 루트 정보.' },
-  technique: { label: '기술 · 무브', roman: 'II', desc: '손과 발로 몸을 움직이는 법.' },
-  gear: { label: '장비', roman: 'III', desc: '생명줄이 되는 물건들.' },
-  guide: { label: '가이드', roman: 'IV', desc: '입문과 안전, 그리고 문화.' },
+
+const diffLabel: Record<string, string> = {
+  beginner: '입문',
+  intermediate: '중급',
+  advanced: '고급',
 };
+const diffOrder = ['beginner', 'intermediate', 'advanced'];
+
+// 기술 문서를 난이도 순 정렬
+const sortedTechniques = [...grouped.technique].sort((a, b) => {
+  const ai = diffOrder.indexOf(a.data.difficulty_level || 'beginner');
+  const bi = diffOrder.indexOf(b.data.difficulty_level || 'beginner');
+  return ai - bi;
+});
+
+// 입문 경로: guide → gear(beginner) → technique(beginner) → crag 1개
+const beginnerPath = [
+  ...grouped.guide.slice(0, 1),
+  ...grouped.gear.slice(0, 1),
+  ...grouped.technique.filter(t => t.data.difficulty_level === 'beginner').slice(0, 1),
+  ...grouped.crag.slice(0, 1),
+];
+
+const sections = [
+  { key: 'technique', label: '기술 · 무브', roman: 'I',  desc: '손과 발로 몸을 움직이는 법.' },
+  { key: 'gear',      label: '장비',        roman: 'II', desc: '생명줄이 되는 물건들.' },
+  { key: 'crag',      label: '암장',        roman: 'III',desc: '전국의 바위들. 접근과 루트.' },
+  { key: 'guide',     label: '가이드',      roman: 'IV', desc: '입문, 안전, 그리고 문화.' },
+] as const;
 ---
 <BaseLayout title="위키">
 <div class="container">
+
   <div class="eyebrow">The Wiki — 서가</div>
-  <h1>암벽을 배우는<br/><em style="font-style:italic; color:var(--ochre);">서가.</em></h1>
-  <p style="font-size:1.1rem; max-width:560px; color:var(--stone-700); margin-top:1.5rem;">
-    루트를 가기 전에 한 번, 다녀와서 다시 한 번. 위키는 기록장이 아니라 배움의 장소입니다.
+  <h1>배움이 <em>쌓이는 곳.</em></h1>
+  <p class="intro">
+    루트를 가기 전에 한 번, 다녀와서 다시 한 번.<br/>
+    직접 쓰고 고치며 지식이 깊어집니다.
   </p>
 
-  <div class="meta" style="margin-top:2rem;">총 {all.length}개 문서 · 지속 확장 중</div>
-
-  <hr class="rule" />
-
-  {Object.entries(grouped).map(([type, items]) => items.length > 0 && (
-    <section class="wiki-section">
-      <div class="section-title">
-        <span class="roman">{meta[type as keyof typeof meta].roman}</span>
-        <div>
-          <h2>{meta[type as keyof typeof meta].label}</h2>
-          <div class="section-desc">{meta[type as keyof typeof meta].desc}</div>
-        </div>
-        <span class="count">{items.length.toString().padStart(2,'0')}</span>
+  <!-- 입문자 경로 -->
+  {beginnerPath.length > 0 && (
+    <section class="path-section">
+      <div class="path-label">
+        <span class="path-badge">START</span>
+        처음 시작한다면 이 순서로
       </div>
-      <ul class="wiki-list">
-        {items.map(item => (
-          <li>
-            <a href={`/wiki/${item.slug}/`}>
-              <span class="wiki-item-title">{item.data.title}</span>
-              {item.data.summary && <span class="wiki-item-summary"> — {item.data.summary}</span>}
-            </a>
-          </li>
-        ))}
-      </ul>
+      <div class="path-steps">
+        {beginnerPath.map((entry, i) => {
+          const typeKo: Record<string, string> = { guide: '가이드', gear: '장비', technique: '기술', crag: '암장' };
+          return (
+            <div class="path-step">
+              {i > 0 && <span class="path-arrow">→</span>}
+              <a href={`/wiki/${entry.slug}/`} class="path-card">
+                <span class="path-type">{typeKo[entry.data.type]}</span>
+                <span class="path-title">{entry.data.title}</span>
+              </a>
+            </div>
+          );
+        })}
+      </div>
     </section>
-  ))}
+  )}
+
+  <hr class="rule" style="margin: 3rem 0;" />
+
+  <!-- 카테고리별 목록 -->
+  {sections.map(({ key, label, roman, desc }) => {
+    const items = key === 'technique' ? sortedTechniques : grouped[key];
+    if (items.length === 0) return null;
+    return (
+      <section class="wiki-section">
+        <div class="section-head">
+          <span class="roman">{roman}</span>
+          <div class="section-info">
+            <h2>{label}</h2>
+            <p class="section-desc">{desc}</p>
+          </div>
+          <span class="section-count">{String(items.length).padStart(2, '0')}</span>
+        </div>
+        <ul class="wiki-list">
+          {items.map(item => (
+            <li>
+              <a href={`/wiki/${item.slug}/`} class="wiki-row">
+                <div class="wiki-row-main">
+                  <span class="wiki-title">{item.data.title}</span>
+                  {item.data.summary && (
+                    <span class="wiki-summary">{item.data.summary}</span>
+                  )}
+                </div>
+                <div class="wiki-row-badges">
+                  {item.data.type === 'technique' && item.data.difficulty_level && (
+                    <span class={`diff-badge diff-${item.data.difficulty_level}`}>
+                      {diffLabel[item.data.difficulty_level]}
+                    </span>
+                  )}
+                  {item.data.type === 'crag' && item.data.location && (
+                    <span class="region-badge">{item.data.location.region}</span>
+                  )}
+                  {item.data.type === 'gear' && item.data.gear_category && (
+                    <span class="region-badge">{item.data.gear_category}</span>
+                  )}
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <a href="#" class="add-hint" title="Admin에서 추가하세요">
+          + 문서 추가하기 →
+        </a>
+      </section>
+    );
+  })}
+
 </div>
 
 <style>
   h1 {
-    font-family: 'Fraunces', serif;
+    font-family: 'Fraunces', 'Hahmlet', serif;
     font-weight: 400;
-    line-height: 1;
-    margin-bottom: 0.5rem;
+    line-height: 1.05;
+    margin-bottom: 1rem;
   }
+  h1 em { font-style: italic; color: var(--ochre); }
+  .intro {
+    font-size: 1.05rem;
+    color: var(--stone-700);
+    line-height: 1.7;
+    margin-bottom: 2.5rem;
+  }
+
+  /* 입문 경로 */
+  .path-section {
+    background: var(--paper-soft);
+    border: 1px solid var(--rule-strong);
+    padding: 1.5rem 2rem;
+    margin-bottom: 0;
+  }
+  .path-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--stone-700);
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+  }
+  .path-badge {
+    background: var(--ochre);
+    color: var(--paper);
+    padding: 0.15em 0.5em;
+    font-size: 0.62rem;
+    letter-spacing: 0.15em;
+  }
+  .path-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .path-step { display: flex; align-items: center; gap: 0.5rem; }
+  .path-arrow {
+    color: var(--stone-300);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .path-card {
+    display: flex;
+    flex-direction: column;
+    padding: 0.7rem 1.1rem;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper);
+    min-width: 100px;
+    transition: all 0.15s;
+    border-bottom: none;
+  }
+  .path-card:hover { border-color: var(--ochre); color: var(--ink); }
+  .path-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    margin-bottom: 0.2rem;
+  }
+  .path-title {
+    font-family: 'Hahmlet', serif;
+    font-size: 0.95rem;
+    font-weight: 400;
+    color: var(--ink);
+  }
+
+  /* 카테고리 섹션 */
   .wiki-section { margin-top: 3.5rem; }
-  .section-title {
+  .section-head {
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 1.5rem;
     align-items: baseline;
     padding-bottom: 1rem;
-    border-bottom: 1px solid var(--rule-strong);
-    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 0;
   }
   .roman {
     font-family: 'Fraunces', serif;
     font-style: italic;
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     color: var(--ochre);
-    letter-spacing: 0.05em;
   }
-  .section-title h2 { margin: 0; font-size: 1.8rem; }
+  .section-info h2 { margin: 0; font-size: 1.6rem; }
   .section-desc {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: var(--stone-700);
-    margin-top: 0.3rem;
+    margin-top: 0.2rem;
   }
-  .count {
+  .section-count {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--stone-500);
     letter-spacing: 0.1em;
   }
+
+  /* 위키 행 */
   .wiki-list { list-style: none; margin: 0; padding: 0; }
-  .wiki-list li {
-    border-bottom: 1px solid var(--rule);
-    padding: 0.9rem 0;
-  }
+  .wiki-list li { border-bottom: 1px solid var(--rule); }
   .wiki-list li:last-child { border-bottom: none; }
-  .wiki-list a {
-    display: block;
+
+  .wiki-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 1rem 0.5rem;
     border: none;
     color: var(--ink);
-    transition: transform 0.15s;
+    transition: padding 0.15s, background 0.15s;
   }
-  .wiki-list a:hover {
-    color: var(--ochre);
-    transform: translateX(6px);
+  .wiki-row:hover {
+    padding-left: 1rem;
+    background: color-mix(in srgb, var(--ochre) 4%, transparent);
+    color: var(--ink);
   }
-  .wiki-item-title {
-    font-family: 'Fraunces', serif;
-    font-size: 1.2rem;
+  .wiki-row-main { min-width: 0; }
+  .wiki-title {
+    font-family: 'Hahmlet', 'Fraunces', serif;
+    font-size: 1.15rem;
     font-weight: 400;
+    display: block;
   }
-  .wiki-item-summary {
+  .wiki-summary {
+    font-size: 0.85rem;
     color: var(--stone-700);
-    font-size: 0.95rem;
+    display: block;
+    margin-top: 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 480px;
+  }
+  .wiki-row-badges {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  /* 배지 */
+  .diff-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    padding: 0.2em 0.6em;
+    border: 1px solid;
+    border-radius: 2px;
+  }
+  .diff-beginner  { color: var(--moss); border-color: color-mix(in srgb, var(--moss) 40%, transparent); }
+  .diff-intermediate { color: var(--ochre); border-color: color-mix(in srgb, var(--ochre) 40%, transparent); }
+  .diff-advanced  { color: var(--ink); border-color: var(--rule-strong); }
+  .region-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    padding: 0.2em 0.6em;
+    background: var(--stone-100);
+    color: var(--stone-700);
+    border-radius: 2px;
+  }
+
+  /* 문서 추가 힌트 */
+  .add-hint {
+    display: block;
+    margin-top: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--stone-500);
+    border: none;
+    border-bottom: 1px dashed var(--rule-strong);
+    width: fit-content;
+  }
+  .add-hint:hover { color: var(--ochre); border-bottom-color: var(--ochre); }
+
+  @media (max-width: 640px) {
+    .path-section { padding: 1.2rem; }
+    .path-steps { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+    .path-arrow { transform: rotate(90deg); }
+    .wiki-summary { display: none; }
+    .section-head { grid-template-columns: auto 1fr; }
+    .section-count { display: none; }
   }
 </style>
 </BaseLayout>

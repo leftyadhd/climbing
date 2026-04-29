@@ -2,18 +2,37 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 
-const logs = (await getCollection('logs')).sort(
+const allLogs = (await getCollection('logs')).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
-).slice(0, 4);
+);
+const logs = allLogs.slice(0, 4);
 
 const crags = await getCollection('wiki', ({ data }) => data.type === 'crag');
 const techniques = await getCollection('wiki', ({ data }) => data.type === 'technique');
 const gear = await getCollection('wiki', ({ data }) => data.type === 'gear');
-const allLogs = await getCollection('logs');
+const allWiki = await getCollection('wiki');
 
-// 통계
 const sendsCount = allLogs.reduce((sum, log) =>
   sum + log.data.routes.filter(r => ['onsight','flash','redpoint','send'].includes(r.status)).length, 0);
+
+// 최근 6개월 세션 분포 (스파크라인)
+const now = new Date();
+const monthlyData = Array.from({ length: 6 }, (_, i) => {
+  const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+  const count = allLogs.filter(l => {
+    const ld = l.data.date;
+    return ld.getFullYear() === d.getFullYear() && ld.getMonth() === d.getMonth();
+  }).length;
+  return { label: `${d.getMonth() + 1}월`, count };
+});
+const maxMonth = Math.max(...monthlyData.map(m => m.count), 1);
+
+// 진행 중인 프로젝트 루트
+const projects = allLogs.flatMap(l =>
+  l.data.routes
+    .filter(r => r.status === 'projecting')
+    .map(r => ({ name: r.name, grade: r.grade, logSlug: l.slug, logTitle: l.data.title, crag: l.data.crag }))
+).slice(0, 3);
 ---
 <BaseLayout title="홈" hero={true}>
 
@@ -57,6 +76,13 @@ const sendsCount = allLogs.reduce((sum, log) =>
       <div class="stat">
         <div class="stat-num">{allLogs.length.toString().padStart(2, '0')}</div>
         <div class="stat-label">세션 기록</div>
+        <div class="sparkline">
+          {monthlyData.map(m => (
+            <div class="spark-bar-wrap" title={`${m.label} ${m.count}세션`}>
+              <div class="spark-bar" style={`height:${Math.round((m.count / maxMonth) * 100)}%`}></div>
+            </div>
+          ))}
+        </div>
       </div>
       <div class="stat">
         <div class="stat-num">{sendsCount.toString().padStart(2, '0')}</div>
@@ -67,7 +93,7 @@ const sendsCount = allLogs.reduce((sum, log) =>
         <div class="stat-label">암장 아카이브</div>
       </div>
       <div class="stat">
-        <div class="stat-num">{(techniques.length + gear.length).toString().padStart(2, '0')}</div>
+        <div class="stat-num">{allWiki.length.toString().padStart(2, '0')}</div>
         <div class="stat-label">위키 문서</div>
       </div>
     </div>
@@ -109,6 +135,31 @@ const sendsCount = allLogs.reduce((sum, log) =>
     ))}
   </div>
 </section>
+
+{projects.length > 0 && (
+  <>
+    <hr class="rule-ornate" style="z-index:2; position:relative;" />
+    <section class="container-wide section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">On the Wall — 진행 중</div>
+          <h2>아직 잡지 못한 루트들</h2>
+        </div>
+        <a href="/logs/" class="view-all">전체 로그 →</a>
+      </div>
+      <div class="projects-grid">
+        {projects.map(p => (
+          <a href={`/logs/${p.logSlug}/`} class="project-card">
+            <div class="project-status">PROJECTING</div>
+            <div class="project-name">{p.name}</div>
+            {p.grade && <div class="project-grade">{p.grade}</div>}
+            <div class="project-log">{p.logTitle}</div>
+          </a>
+        ))}
+      </div>
+    </section>
+  </>
+)}
 
 <hr class="rule-ornate" style="z-index:2; position:relative;" />
 
@@ -316,6 +367,70 @@ const sendsCount = allLogs.reduce((sum, log) =>
     color: var(--stone-500);
     margin-top: 0.5rem;
   }
+  .sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 28px;
+    margin-top: 0.8rem;
+  }
+  .spark-bar-wrap {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+  }
+  .spark-bar {
+    width: 100%;
+    min-height: 2px;
+    background: var(--ochre);
+    opacity: 0.5;
+    transition: opacity 0.2s;
+  }
+  .spark-bar-wrap:last-child .spark-bar { opacity: 1; }
+
+  /* PROJECTS */
+  .projects-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .project-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1.5rem;
+    background: var(--paper);
+    border: none;
+    color: var(--ink);
+    transition: background 0.15s;
+  }
+  .project-card:hover { background: color-mix(in srgb, var(--ochre) 5%, var(--paper)); }
+  .project-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--ochre);
+    margin-bottom: 0.2rem;
+  }
+  .project-name {
+    font-family: 'Fraunces', 'Hahmlet', serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+  }
+  .project-grade {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--stone-700);
+  }
+  .project-log {
+    font-size: 0.82rem;
+    color: var(--stone-500);
+    margin-top: auto;
+    padding-top: 0.5rem;
+  }
 
   /* SECTION */
   .section { margin-top: 2rem; }
@@ -437,6 +552,7 @@ const sendsCount = allLogs.reduce((sum, log) =>
     .log-num { font-size: 1.8rem; }
     .log-title { font-size: 1.3rem; }
     .hero-scroll { display: none; }
+    .projects-grid { grid-template-columns: 1fr; }
   }
 </style>
 
