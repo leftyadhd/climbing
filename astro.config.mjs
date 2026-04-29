@@ -3,7 +3,7 @@ import sitemap from '@astrojs/sitemap';
 import pagefind from 'astro-pagefind';
 
 export default defineConfig({
-  site: 'https://your-site.netlify.app',
+  site: 'https://rockclimb.netlify.app',
   integrations: [sitemap(), pagefind()],
   markdown: {
     shikiConfig: {
