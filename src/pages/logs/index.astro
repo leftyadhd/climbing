@@ -18,6 +18,9 @@ const totalSends = logs.reduce((sum, l) =>
   sum + l.data.routes.filter(r => ['onsight','flash','redpoint','send'].includes(r.status)).length, 0
 );
 
+const now = new Date();
+now.setHours(0, 0, 0, 0);
+
 const statusLabel: Record<string, string> = {
   onsight: 'OS', flash: 'FL', redpoint: 'RP', send: 'SD',
   projecting: 'PJ', attempt: 'AT', failed: '—',
@@ -76,10 +79,11 @@ const statusGroup: Record<string, string> = {
       const d = log.data.date;
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
+      const isUpcoming = d >= now;
 
       return (
         <article
-          class="log-card"
+          class={`log-card${isUpcoming ? ' log-card--upcoming' : ''}`}
           data-year={String(d.getFullYear())}
           data-crag={cragSlug || ''}
         >
@@ -117,14 +121,16 @@ const statusGroup: Record<string, string> = {
               </ul>
             )}
           </div>
-          {log.data.routes.length > 0 && (
-            <div class="card-result">
-              {sends > 0
-                ? <span class="result-send">{sends}<small>SENT</small></span>
-                : <span class="result-proj">PJ</span>
-              }
-            </div>
-          )}
+          <div class="card-result">
+            {isUpcoming
+              ? <span class="result-upcoming">UPCOMING</span>
+              : log.data.routes.length > 0
+                ? sends > 0
+                  ? <span class="result-send">{sends}<small>SENT</small></span>
+                  : <span class="result-proj">PJ</span>
+                : null
+            }
+          </div>
         </article>
       );
     })}
@@ -252,6 +258,15 @@ const statusGroup: Record<string, string> = {
   .log-card:first-child { border-top: 1px solid var(--rule); }
   .log-card:hover { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
 
+  .log-card--upcoming {
+    opacity: 0.6;
+    border-bottom-style: dashed;
+  }
+  .log-card--upcoming:first-child { border-top-style: dashed; }
+  .log-card--upcoming .date-md { color: var(--stone-500); }
+  .log-card--upcoming .card-title a { color: var(--stone-700); }
+  .log-card--upcoming:hover { background: color-mix(in srgb, var(--stone-500) 4%, transparent); opacity: 0.8; }
+
   .card-date {
     text-align: right;
     padding-top: 0.3rem;
@@ -377,6 +392,14 @@ const statusGroup: Record<string, string> = {
     color: var(--ochre);
     padding: 0.25em 0.5em;
     border: 1px solid color-mix(in srgb, var(--ochre) 35%, transparent);
+  }
+  .result-upcoming {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--stone-500);
+    padding: 0.25em 0.5em;
+    border: 1px dashed var(--stone-300);
   }
 
   .empty-msg {

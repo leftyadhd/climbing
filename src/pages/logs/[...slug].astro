@@ -13,6 +13,10 @@ export async function getStaticPaths() {
 const { log } = Astro.props;
 const { Content } = await log.render();
 
+const now = new Date();
+now.setHours(0, 0, 0, 0);
+const isUpcoming = log.data.date >= now;
+
 const allWiki = await getCollection('wiki');
 const cragEntry = log.data.crag
   ? allWiki.find(w => w.data.type === 'crag' && w.slug.endsWith(log.data.crag!))
@@ -40,6 +44,13 @@ const statusClass: Record<string, string> = {
 <BaseLayout title={log.data.title}>
 <article data-pagefind-body>
 <div class="container">
+
+  {isUpcoming && (
+    <div class="upcoming-banner">
+      <span class="upcoming-dot"></span>
+      UPCOMING — {log.data.date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정
+    </div>
+  )}
 
   <div class="doc-meta">
     <a href="/logs/">← Logs</a>
@@ -137,6 +148,33 @@ const statusClass: Record<string, string> = {
 </article>
 
 <style>
+  .upcoming-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--stone-700);
+    background: var(--paper-soft);
+    border: 1px dashed var(--stone-300);
+    padding: 0.7rem 1rem;
+    margin-bottom: 2rem;
+  }
+  .upcoming-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--stone-400, var(--stone-500));
+    animation: pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.8); }
+    50%       { opacity: 1;   transform: scale(1.2); }
+  }
+
   .doc-meta {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.75rem;
