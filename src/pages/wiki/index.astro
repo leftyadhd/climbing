@@ -3,11 +3,11 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
 const all = await getCollection('wiki');
+const techniques = all.filter(e => e.data.type === 'technique');
 const grouped = {
-  guide:     all.filter(e => e.data.type === 'guide'),
-  technique: all.filter(e => e.data.type === 'technique'),
-  gear:      all.filter(e => e.data.type === 'gear'),
-  crag:      all.filter(e => e.data.type === 'crag'),
+  guide: all.filter(e => e.data.type === 'guide'),
+  gear:  all.filter(e => e.data.type === 'gear'),
+  crag:  all.filter(e => e.data.type === 'crag'),
 };
 
 const diffLabel: Record<string, string> = {
@@ -15,20 +15,32 @@ const diffLabel: Record<string, string> = {
   intermediate: '중급',
   advanced: '고급',
 };
-const diffOrder = ['beginner', 'intermediate', 'advanced'];
 
-// 기술 문서를 난이도 순 정렬
-const sortedTechniques = [...grouped.technique].sort((a, b) => {
-  const ai = diffOrder.indexOf(a.data.difficulty_level || 'beginner');
-  const bi = diffOrder.indexOf(b.data.difficulty_level || 'beginner');
-  return ai - bi;
+// 7개 기술 카테고리
+const techCategories: { tag: string; label: string; desc: string }[] = [
+  { tag: '슬랩',      label: '슬랩',      desc: '마찰력과 밸런스로 오르는 완경사 바위.' },
+  { tag: '하강',      label: '하강',      desc: '로프를 타고 안전하게 내려오는 법.' },
+  { tag: '확보',      label: '확보',      desc: '파트너를 붙잡는 기술 전반.' },
+  { tag: '크랙',      label: '크랙',      desc: '바위 틈새에 손발을 잼밍하는 기술.' },
+  { tag: '후등자확보', label: '후등자 확보', desc: '선등자가 위에서 후등자를 확보하는 법.' },
+  { tag: '선등자확보', label: '선등자 확보', desc: '선등하며 중간 확보물을 설치하는 법.' },
+  { tag: '볼트밟기',   label: '볼트 밟기', desc: '볼트와 퀵드로를 발판 삼아 이동하는 법.' },
+];
+
+// 태그로 카테고리 매핑, 미분류는 별도 수집
+const categorized = new Set<string>();
+const techByCategory = techCategories.map(cat => {
+  const items = techniques.filter(t => t.data.tags.includes(cat.tag));
+  items.forEach(t => categorized.add(t.slug));
+  return { ...cat, items };
 });
+const uncategorized = techniques.filter(t => !categorized.has(t.slug));
 
-// 입문 경로: guide → gear(beginner) → technique(beginner) → crag 1개
+// 입문 경로
 const beginnerPath = [
   ...grouped.guide.slice(0, 1),
   ...grouped.gear.slice(0, 1),
-  ...grouped.technique.filter(t => t.data.difficulty_level === 'beginner').slice(0, 1),
+  ...techniques.filter(t => t.data.difficulty_level === 'beginner').slice(0, 1),
   ...grouped.crag.slice(0, 1),
 ];
 
@@ -36,12 +48,11 @@ const typeKo: Record<string, string> = {
   guide: '가이드', gear: '장비', technique: '기술', crag: '암장',
 };
 
-type SectionKey = 'technique' | 'gear' | 'crag' | 'guide';
-const sections: { key: SectionKey; label: string; roman: string; desc: string }[] = [
-  { key: 'technique', label: '기술 · 무브', roman: 'I',   desc: '손과 발로 몸을 움직이는 법.' },
-  { key: 'gear',      label: '장비',        roman: 'II',  desc: '생명줄이 되는 물건들.' },
-  { key: 'crag',      label: '암장',        roman: 'III', desc: '전국의 바위들. 접근과 루트.' },
-  { key: 'guide',     label: '가이드',      roman: 'IV',  desc: '입문, 안전, 그리고 문화.' },
+type SectionKey = 'gear' | 'crag' | 'guide';
+const supportSections: { key: SectionKey; label: string; roman: string; desc: string }[] = [
+  { key: 'gear',  label: '장비',   roman: 'II',  desc: '생명줄이 되는 물건들.' },
+  { key: 'crag',  label: '암장',   roman: 'III', desc: '전국의 바위들. 접근과 루트.' },
+  { key: 'guide', label: '가이드', roman: 'IV',  desc: '입문, 안전, 그리고 문화.' },
 ];
 ---
 <BaseLayout title="위키">
@@ -77,9 +88,83 @@ const sections: { key: SectionKey; label: string; roman: string; desc: string }[
 
   <hr class="rule" style="margin: 3rem 0;" />
 
-  <!-- 카테고리별 목록 -->
-  {sections.map(({ key, label, roman, desc }) => {
-    const items = key === 'technique' ? sortedTechniques : grouped[key];
+  <!-- I. 기술 · 무브 — 7개 카테고리 -->
+  <section class="wiki-section">
+    <div class="section-head">
+      <span class="roman">I</span>
+      <div class="section-info">
+        <h2>기술 · 무브</h2>
+        <p class="section-desc">손과 발로 몸을 움직이는 법.</p>
+      </div>
+      <span class="section-count">{String(techniques.length).padStart(2, '0')}</span>
+    </div>
+
+    <div class="tech-grid">
+      {techByCategory.map(cat => (
+        <div class="tech-cat">
+          <div class="tech-cat-head">
+            <span class="tech-cat-label">{cat.label}</span>
+            <span class="tech-cat-desc">{cat.desc}</span>
+          </div>
+          {cat.items.length > 0 ? (
+            <ul class="wiki-list">
+              {cat.items.map(item => (
+                <li>
+                  <a href={`/wiki/${item.slug}/`} class="wiki-row">
+                    <div class="wiki-row-main">
+                      <span class="wiki-title">{item.data.title}</span>
+                      {item.data.summary && (
+                        <span class="wiki-summary">{item.data.summary}</span>
+                      )}
+                    </div>
+                    {item.data.difficulty_level && (
+                      <span class={`diff-badge diff-${item.data.difficulty_level}`}>
+                        {diffLabel[item.data.difficulty_level]}
+                      </span>
+                    )}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div class="tech-cat-empty">아직 작성된 문서 없음</div>
+          )}
+        </div>
+      ))}
+    </div>
+
+    {uncategorized.length > 0 && (
+      <div class="tech-cat tech-cat--misc">
+        <div class="tech-cat-head">
+          <span class="tech-cat-label">기타</span>
+          <span class="tech-cat-desc">카테고리 미분류 기술 문서.</span>
+        </div>
+        <ul class="wiki-list">
+          {uncategorized.map(item => (
+            <li>
+              <a href={`/wiki/${item.slug}/`} class="wiki-row">
+                <div class="wiki-row-main">
+                  <span class="wiki-title">{item.data.title}</span>
+                  {item.data.summary && (
+                    <span class="wiki-summary">{item.data.summary}</span>
+                  )}
+                </div>
+                {item.data.difficulty_level && (
+                  <span class={`diff-badge diff-${item.data.difficulty_level}`}>
+                    {diffLabel[item.data.difficulty_level]}
+                  </span>
+                )}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </section>
+
+  <!-- II·III·IV 섹션 -->
+  {supportSections.map(({ key, label, roman, desc }) => {
+    const items = grouped[key];
     if (items.length === 0) return null;
     return (
       <section class="wiki-section">
@@ -102,11 +187,6 @@ const sections: { key: SectionKey; label: string; roman: string; desc: string }[
                   )}
                 </div>
                 <div class="wiki-row-badges">
-                  {item.data.type === 'technique' && item.data.difficulty_level && (
-                    <span class={`diff-badge diff-${item.data.difficulty_level}`}>
-                      {diffLabel[item.data.difficulty_level]}
-                    </span>
-                  )}
                   {item.data.type === 'crag' && item.data.location && (
                     <span class="region-badge">{item.data.location.region}</span>
                   )}
@@ -204,6 +284,52 @@ const sections: { key: SectionKey; label: string; roman: string; desc: string }[
     font-weight: 400;
     color: var(--ink);
   }
+
+  /* 기술 카테고리 그리드 */
+  .tech-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0;
+    margin-top: 0;
+    border-left: 1px solid var(--rule);
+    border-top: 1px solid var(--rule);
+  }
+  .tech-cat {
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 1.2rem 1.4rem;
+  }
+  .tech-cat--misc {
+    grid-column: 1 / -1;
+    border-right: 1px solid var(--rule);
+  }
+  .tech-cat-head {
+    margin-bottom: 0.8rem;
+  }
+  .tech-cat-label {
+    display: block;
+    font-family: 'Hahmlet', serif;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 0.2rem;
+  }
+  .tech-cat-desc {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--stone-500);
+    line-height: 1.4;
+  }
+  .tech-cat-empty {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--stone-300);
+    padding: 0.5rem 0;
+    border-top: 1px dashed var(--rule);
+  }
+  .tech-cat .wiki-list li:first-child { border-top: 1px solid var(--rule); }
+  .tech-cat .wiki-row { padding: 0.7rem 0; }
 
   /* 카테고리 섹션 */
   .wiki-section { margin-top: 3.5rem; }
