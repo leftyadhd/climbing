@@ -77,4 +77,21 @@ const logs = defineCollection({
   }),
 });
 
-export const collections = { wiki, logs };
+// 장비 인벤토리 - 내가 소유한 장비 목록
+const devices = defineCollection({
+  type: 'content',
+  schema: z.object({
+    title: z.string(),
+    category: z.string(),                   // 확보기, 하네스, 로프, 캠, 헬멧 등
+    brand: z.string().nullish(),
+    model: z.string().nullish(),
+    purchased: z.date().nullish(),
+    price_krw: z.number().nullish(),
+    condition: z.enum(['new', 'good', 'fair', 'retired']).default('good'),
+    active: z.boolean().default(true),
+    wiki_ref: z.string().nullish(),          // 위키 gear 문서 slug 참조
+    tags: z.array(z.string()).default([]),
+  }),
+});
+
+export const collections = { wiki, logs, devices };
