@@ -7,7 +7,7 @@ const allLogs = (await getCollection('logs')).sort(
 );
 const logs = allLogs.slice(0, 4);
 
-const crags = await getCollection('wiki', ({ data }) => data.type === 'crag');
+const crags = await getCollection('crags');
 const techniques = await getCollection('wiki', ({ data }) => data.type === 'technique');
 const gear = await getCollection('wiki', ({ data }) => data.type === 'gear');
 const allWiki = await getCollection('wiki');

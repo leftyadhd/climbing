@@ -13,19 +13,16 @@ export async function getStaticPaths() {
 const { crag } = Astro.props;
 const { Content } = await crag.render();
 
-const allCragRoutes = await getCollection('crag-routes');
-const cragRoutesEntry = allCragRoutes.find(cr => cr.id === crag.slug) ?? null;
-
-const sectorNames: string[] = cragRoutesEntry
-  ? [...new Set(cragRoutesEntry.data.routes.map(r => r.sector ?? '전체'))].sort()
+const routes = crag.data.routes;
+const sectorNames: string[] = routes.length
+  ? [...new Set(routes.map(r => r.sector ?? '전체'))].sort()
   : [];
-const routesBySector: Record<string, typeof cragRoutesEntry.data.routes> = {};
-if (cragRoutesEntry) {
-  for (const r of cragRoutesEntry.data.routes) {
-    const s = r.sector ?? '전체';
-    if (!routesBySector[s]) routesBySector[s] = [];
-    routesBySector[s].push(r);
-  }
+type CragRoute = typeof routes[number];
+const routesBySector: Record<string, CragRoute[]> = {};
+for (const r of routes) {
+  const s = r.sector ?? '전체';
+  if (!routesBySector[s]) routesBySector[s] = [];
+  routesBySector[s].push(r);
 }
 
 const allLogs = await getCollection('logs');
@@ -84,10 +81,10 @@ const relatedLogs = allLogs
           <span>{crag.data.season_best.join(' · ')}</span>
         </div>
       )}
-      {cragRoutesEntry && (
+      {routes.length > 0 && (
         <div class="data-row">
           <span class="data-label">루트 수</span>
-          <span>{cragRoutesEntry.data.routes.length}개</span>
+          <span>{routes.length}개</span>
         </div>
       )}
     </div>
@@ -99,7 +96,7 @@ const relatedLogs = allLogs
     </div>
   )}
 
-  {cragRoutesEntry && (
+  {routes.length > 0 && (
     <section class="routes-section">
       <div class="eyebrow" style="margin-top:3rem;">Routes — 루트 목록</div>
       {sectorNames.map(sector => (

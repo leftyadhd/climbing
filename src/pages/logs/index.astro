@@ -6,15 +6,36 @@ const logs = (await getCollection('logs')).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
 );
 
-const cragWiki = await getCollection('wiki', ({ data }) => data.type === 'crag');
-const cragNames: Record<string, string> = Object.fromEntries(
-  cragWiki.map(w => [w.slug.split('/').pop()!, w.data.title])
-);
+const allCrags = await getCollection('crags');
+
+// crag slug → title, mountain
+const cragTitleMap = new Map<string, string>();
+const cragMountainMap = new Map<string, string>(); // slug → mountain label
+for (const c of allCrags) {
+  cragTitleMap.set(c.slug, c.data.title);
+  cragMountainMap.set(c.slug, c.data.mountain ?? c.data.title);
+}
+
+const cragRouteNameMap = new Map<string, string>();
+for (const crag of allCrags) {
+  for (const r of crag.data.routes) {
+    if (r.name) cragRouteNameMap.set(r.id, r.name);
+  }
+}
 
 const years = [...new Set(logs.map(l => l.data.date.getFullYear()))].sort().reverse();
-const crags = [...new Set(logs.map(l => l.data.crag).filter((c): c is string => !!c))].sort();
 
-const totalSends = logs.reduce((sum, l) =>
+// mountain 필터 목록 (logs에 실제 등장하는 것만)
+const mountainsInLogs = [
+  ...new Set(
+    logs
+      .map(l => l.data.crag ? cragMountainMap.get(l.data.crag) : null)
+      .filter((m): m is string => !!m)
+  )
+].sort();
+
+const climbLogs = logs.filter(l => l.data.type !== 'misc');
+const totalSends = climbLogs.reduce((sum, l) =>
   sum + l.data.routes.filter(r => ['onsight','flash','redpoint','send'].includes(r.status)).length, 0
 );
 
@@ -39,7 +60,7 @@ const statusGroup: Record<string, string> = {
       <h1>기록의 <em>층위.</em></h1>
     </div>
     <div class="head-stats">
-      <div class="hs"><span class="hs-n">{logs.length}</span><span class="hs-l">세션</span></div>
+      <div class="hs"><span class="hs-n">{climbLogs.length}</span><span class="hs-l">세션</span></div>
       <div class="hs"><span class="hs-n">{totalSends}</span><span class="hs-l">완등</span></div>
       <div class="hs"><span class="hs-n">{years.length}</span><span class="hs-l">년</span></div>
     </div>
@@ -53,13 +74,11 @@ const statusGroup: Record<string, string> = {
         <button class="filter-btn" data-type="year" data-value={String(y)}>{y}</button>
       ))}
     </div>
-    {crags.length > 0 && (
+    {mountainsInLogs.length > 0 && (
       <div class="filter-group">
-        <button class="filter-btn active" data-type="crag" data-value="all">모든 암장</button>
-        {crags.map(c => (
-          <button class="filter-btn" data-type="crag" data-value={c}>
-            {cragNames[c] || c}
-          </button>
+        <button class="filter-btn active" data-type="mountain" data-value="all">모든 암장</button>
+        {mountainsInLogs.map(m => (
+          <button class="filter-btn" data-type="mountain" data-value={m}>{m}</button>
         ))}
       </div>
     )}
@@ -69,10 +88,9 @@ const statusGroup: Record<string, string> = {
   <div class="log-list" id="log-list">
     {logs.map(log => {
       const cragSlug = log.data.crag;
-      const cragTitle = cragSlug ? (cragNames[cragSlug] || cragSlug) : null;
-      const cragEntry = cragSlug
-        ? cragWiki.find(w => w.slug.endsWith(cragSlug))
-        : null;
+      const cragTitle = cragSlug ? (cragTitleMap.get(cragSlug) ?? cragSlug) : null;
+      const cragEntry = cragSlug ? allCrags.find(c => c.slug === cragSlug) : null;
+      const mountain = cragSlug ? (cragMountainMap.get(cragSlug) ?? '') : '';
       const sends = log.data.routes.filter(r =>
         ['onsight','flash','redpoint','send'].includes(r.status)
       ).length;
@@ -83,9 +101,9 @@ const statusGroup: Record<string, string> = {
 
       return (
         <article
-          class={`log-card${isUpcoming ? ' log-card--upcoming' : ''}`}
+          class={`log-card${isUpcoming ? ' log-card--upcoming' : ''}${log.data.type === 'misc' ? ' log-card--misc' : ''}`}
           data-year={String(d.getFullYear())}
-          data-crag={cragSlug || ''}
+          data-mountain={mountain}
         >
           <div class="card-date">
             <span class="date-md">{mm}.{dd}</span>
@@ -93,17 +111,16 @@ const statusGroup: Record<string, string> = {
           </div>
           <div class="card-body">
             <div class="card-meta">
+              {log.data.type === 'misc' && <span class="misc-tag">기타</span>}
               {cragTitle && (
                 cragEntry
-                  ? <a href={`/wiki/${cragEntry.slug}/`} class="crag-tag">{cragTitle}</a>
+                  ? <a href={`/crags/${cragEntry.slug}/`} class="crag-tag">{cragTitle}</a>
                   : <span class="crag-tag">{cragTitle}</span>
               )}
               {log.data.crew.length > 0 && (
                 <span class="partner-tag">with {log.data.crew.join(', ')}</span>
               )}
-              {log.data.partners.length > 0 && (
-                <span class="partner-tag">rope: {log.data.partners.join(', ')}</span>
-              )}
+
               {log.data.weather && <span class="weather-tag">{log.data.weather}</span>}
             </div>
             <h2 class="card-title">
@@ -113,7 +130,7 @@ const statusGroup: Record<string, string> = {
               <ul class="route-chips">
                 {log.data.routes.slice(0, 5).map(r => (
                   <li class={`route-chip chip-${statusGroup[r.status]}`}>
-                    <span class="chip-name">{r.name}</span>
+                    <span class="chip-name">{r.name ?? (r.route_ref ? (cragRouteNameMap.get(r.route_ref) ?? r.route_ref) : '?')}</span>
                     {r.grade && <span class="chip-grade">{r.grade}</span>}
                     <span class="chip-status">{statusLabel[r.status]}</span>
                   </li>
@@ -162,12 +179,12 @@ const statusGroup: Record<string, string> = {
 
   function applyFilter() {
     const year = document.querySelector<HTMLButtonElement>('.filter-btn[data-type="year"].active')?.dataset.value || 'all';
-    const crag = document.querySelector<HTMLButtonElement>('.filter-btn[data-type="crag"].active')?.dataset.value || 'all';
+    const mountain = document.querySelector<HTMLButtonElement>('.filter-btn[data-type="mountain"].active')?.dataset.value || 'all';
     let visible = 0;
     cards.forEach(card => {
       const yMatch = year === 'all' || card.dataset.year === year;
-      const cMatch = crag === 'all' || card.dataset.crag === crag;
-      const show = yMatch && cMatch;
+      const mMatch = mountain === 'all' || card.dataset.mountain === mountain;
+      const show = yMatch && mMatch;
       card.style.display = show ? '' : 'none';
       if (show) visible++;
     });
@@ -260,6 +277,22 @@ const statusGroup: Record<string, string> = {
   }
   .log-card:first-child { border-top: 1px solid var(--rule); }
   .log-card:hover { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
+
+  .log-card--misc {
+    opacity: 0.55;
+  }
+  .log-card--misc:hover { opacity: 0.8; }
+  .misc-tag {
+    font-size: 0.68rem;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.15em 0.6em;
+    background: var(--stone-100);
+    color: var(--stone-500);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
 
   .log-card--upcoming {
     opacity: 0.6;

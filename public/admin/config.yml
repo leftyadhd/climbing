@@ -17,8 +17,15 @@ collections:
     fields:
       - { label: "제목", name: "title", widget: "string" }
       - { label: "날짜", name: "date", widget: "datetime", format: "YYYY-MM-DD", date_format: "YYYY-MM-DD", time_format: false }
-      - { label: "암장", name: "crag", widget: "string", required: false, hint: "위키 crag 문서 slug (예: seonunsan)" }
-      - { label: "파트너", name: "partners", widget: "list", required: false }
+      - label: "로그 유형"
+        name: "type"
+        widget: "select"
+        options: ["log", "misc"]
+        default: "log"
+        required: false
+      - { label: "암장", name: "crag", widget: "string", required: false, hint: "crags slug (예: 북한산-인수봉)" }
+      - { label: "동행 (그룹)", name: "crew", widget: "list", required: false, hint: "예: 연우지암" }
+      - { label: "파트너 (로프)", name: "partners", widget: "list", required: false }
       - { label: "날씨", name: "weather", widget: "string", required: false }
       - label: "태그"
         name: "tags"
@@ -50,30 +57,30 @@ collections:
           - { label: "메모", name: "notes", widget: "text", required: false }
       - { label: "본문", name: "body", widget: "markdown" }
 
-  # 위키 - 암장
-  - name: "wiki-crags"
-    label: "위키 / 암장"
-    folder: "src/content/wiki/climbing-all/06-crags"
+  # 암장 (독립 컬렉션)
+  - name: "crags"
+    label: "암장"
+    folder: "src/content/crags"
     create: true
     slug: "{{slug}}"
     fields:
       - { label: "제목", name: "title", widget: "string" }
-      - { label: "타입", name: "type", widget: "hidden", default: "crag" }
+      - { label: "산 이름 (그루핑용)", name: "mountain", widget: "string", required: false, hint: "예: 북한산, 도봉산" }
       - label: "위치"
         name: "location"
         widget: "object"
+        required: false
         fields:
           - { label: "지역(시도)", name: "region", widget: "string" }
           - { label: "도시", name: "city", widget: "string", required: false }
           - { label: "위도", name: "lat", widget: "number", value_type: "float" }
           - { label: "경도", name: "lng", widget: "number", value_type: "float" }
-      - { label: "바위 종류", name: "rock_type", widget: "string", required: false }
+      - { label: "암질", name: "rock_type", widget: "string", required: false }
       - label: "등반 종류"
         name: "disciplines"
         widget: "list"
         required: false
       - { label: "접근시간(분)", name: "approach_minutes", widget: "number", required: false }
-      - { label: "루트 수", name: "routes_count", widget: "number", required: false }
       - label: "추천 계절"
         name: "season_best"
         widget: "list"
@@ -157,3 +164,29 @@ collections:
           - { label: "타입", name: "type", widget: "hidden", default: "guide" }
           - { label: "태그", name: "tags", widget: "list", required: false }
           - { label: "본문", name: "body", widget: "markdown" }
+
+  # 장비 인벤토리
+  - name: "devices"
+    label: "장비 인벤토리"
+    folder: "src/content/devices"
+    create: true
+    slug: "{{category}}-{{brand}}-{{slug}}"
+    fields:
+      - { label: "이름", name: "title", widget: "string" }
+      - { label: "카테고리", name: "category", widget: "string", hint: "예: 암벽화, 하네스, 카라비너" }
+      - { label: "브랜드", name: "brand", widget: "string", required: false }
+      - { label: "모델명", name: "model", widget: "string", required: false }
+      - { label: "구매일", name: "purchased", widget: "datetime", format: "YYYY-MM-DD", date_format: "YYYY-MM-DD", time_format: false, required: false }
+      - { label: "구매가(원)", name: "price_krw", widget: "number", required: false }
+      - label: "상태"
+        name: "condition"
+        widget: "select"
+        options: ["new", "good", "fair", "retired"]
+        default: "good"
+      - { label: "현역 여부", name: "active", widget: "boolean", default: true }
+      - { label: "위키 참조", name: "wiki_ref", widget: "string", required: false, hint: "wiki slug (예: climbing-all/03-gear/grigri)" }
+      - label: "태그"
+        name: "tags"
+        widget: "list"
+        required: false
+      - { label: "메모", name: "body", widget: "markdown", required: false }

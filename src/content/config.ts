@@ -22,6 +22,25 @@ const wiki = defineCollection({
   }),
 });
 
+const routeSchema = z.object({
+  id: z.string(),
+  number: z.number().nullish(),
+  name: z.string().nullish(),
+  sector: z.string().nullish(),
+  grade: z.string().nullish(),
+  length_m: z.number().nullish(),
+  style: z.enum(['sport', 'trad', 'boulder', 'multi-pitch']).nullish(),
+  bolts: z.number().nullish(),
+  pitches_count: z.number().nullish(),
+  pitches: z.array(z.object({
+    number: z.number(),
+    grade: z.string().nullish(),
+    length_m: z.number().nullish(),
+    description: z.string().nullish(),
+  })).default([]),
+  notes: z.string().nullish(),
+});
+
 const crags = defineCollection({
   type: 'content',
   schema: z.object({
@@ -36,9 +55,11 @@ const crags = defineCollection({
     disciplines: z.array(z.string()).default([]),
     approach_minutes: z.number().optional(),
     season_best: z.array(z.string()).default([]),
+    mountain: z.string().optional(),
     tags: z.array(z.string()).default([]),
     summary: z.string().optional(),
     updated: z.date().optional(),
+    routes: z.array(routeSchema).default([]),
   }),
 });
 
@@ -47,7 +68,7 @@ const logs = defineCollection({
   schema: z.object({
     title: z.string(),
     date: z.date(),
-    type: z.literal('log').default('log'),
+    type: z.enum(['log', 'misc']).default('log'),
     crag: z.string().nullish(),
     crew: z.array(z.string()).default([]),
     partners: z.array(z.string()).default([]),
@@ -55,7 +76,7 @@ const logs = defineCollection({
     tags: z.array(z.string()).default([]),
     photos: z.array(z.string()).default([]),
     routes: z.array(z.object({
-      name: z.string(),
+      name: z.string().nullish(),
       grade: z.string().nullish(),
       style: z.string().nullish(),
       status: z.enum(['onsight', 'flash', 'redpoint', 'send', 'projecting', 'attempt', 'failed']),
@@ -74,30 +95,6 @@ const logs = defineCollection({
   }),
 });
 
-const cragRoutes = defineCollection({
-  type: 'data',
-  schema: z.object({
-    crag: z.string(),
-    routes: z.array(z.object({
-      id: z.string(),
-      number: z.number().nullish(),
-      name: z.string().nullish(),
-      sector: z.string().nullish(),
-      grade: z.string().nullish(),
-      length_m: z.number().nullish(),
-      style: z.enum(['sport', 'trad', 'boulder', 'multi-pitch']).nullish(),
-      bolts: z.number().nullish(),
-      pitches_count: z.number().nullish(),
-      pitches: z.array(z.object({
-        number: z.number(),
-        grade: z.string().nullish(),
-        length_m: z.number().nullish(),
-        description: z.string().nullish(),
-      })).default([]),
-      notes: z.string().nullish(),
-    })),
-  }),
-});
 
 const devices = defineCollection({
   type: 'content',
@@ -115,4 +112,4 @@ const devices = defineCollection({
   }),
 });
 
-export const collections = { wiki, crags, logs, 'crag-routes': cragRoutes, devices };
+export const collections = { wiki, crags, logs, devices };

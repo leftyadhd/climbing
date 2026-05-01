@@ -184,9 +184,6 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
                   )}
                 </div>
                 <div class="wiki-row-badges">
-                  {item.data.type === 'crag' && item.data.location && (
-                    <span class="region-badge">{item.data.location.region}</span>
-                  )}
                   {item.data.type === 'gear' && item.data.gear_category && (
                     <span class="region-badge">{item.data.gear_category}</span>
                   )}
