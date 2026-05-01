@@ -56,7 +56,8 @@ const logs = defineCollection({
     date: z.date(),
     type: z.literal('log').default('log'),
     crag: z.string().nullish(),
-    partners: z.array(z.string()).default([]),
+    crew: z.array(z.string()).default([]),         // 함께 간 팀/그룹
+    partners: z.array(z.string()).default([]),     // 로프 파트너 (개인)
     weather: z.string().nullish(),
     tags: z.array(z.string()).default([]),
     photos: z.array(z.string()).default([]),

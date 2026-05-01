@@ -98,8 +98,11 @@ const statusGroup: Record<string, string> = {
                   ? <a href={`/wiki/${cragEntry.slug}/`} class="crag-tag">{cragTitle}</a>
                   : <span class="crag-tag">{cragTitle}</span>
               )}
+              {log.data.crew.length > 0 && (
+                <span class="partner-tag">with {log.data.crew.join(', ')}</span>
+              )}
               {log.data.partners.length > 0 && (
-                <span class="partner-tag">with {log.data.partners.join(', ')}</span>
+                <span class="partner-tag">rope: {log.data.partners.join(', ')}</span>
               )}
               {log.data.weather && <span class="weather-tag">{log.data.weather}</span>}
             </div>

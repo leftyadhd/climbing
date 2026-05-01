@@ -112,6 +112,12 @@ const pitchStatusClass: Record<string, string> = {
         <span>{log.data.weather}</span>
       </div>
     )}
+    {log.data.crew.length > 0 && (
+      <div class="session-row">
+        <span class="session-label">Crew</span>
+        <span>{log.data.crew.join(', ')}</span>
+      </div>
+    )}
     {log.data.partners.length > 0 && (
       <div class="session-row">
         <span class="session-label">Partners</span>
