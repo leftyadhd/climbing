@@ -7,7 +7,6 @@ const techniques = all.filter(e => e.data.type === 'technique');
 const grouped = {
   guide: all.filter(e => e.data.type === 'guide'),
   gear:  all.filter(e => e.data.type === 'gear'),
-  crag:  all.filter(e => e.data.type === 'crag'),
 };
 
 const diffLabel: Record<string, string> = {
@@ -41,18 +40,16 @@ const beginnerPath = [
   ...grouped.guide.slice(0, 1),
   ...grouped.gear.slice(0, 1),
   ...techniques.filter(t => t.data.difficulty_level === 'beginner').slice(0, 1),
-  ...grouped.crag.slice(0, 1),
 ];
 
 const typeKo: Record<string, string> = {
-  guide: '가이드', gear: '장비', technique: '기술', crag: '암장',
+  guide: '가이드', gear: '장비', technique: '기술',
 };
 
-type SectionKey = 'gear' | 'crag' | 'guide';
+type SectionKey = 'gear' | 'guide';
 const supportSections: { key: SectionKey; label: string; roman: string; desc: string }[] = [
   { key: 'gear',  label: '장비',   roman: 'II',  desc: '생명줄이 되는 물건들.' },
-  { key: 'crag',  label: '암장',   roman: 'III', desc: '전국의 바위들. 접근과 루트.' },
-  { key: 'guide', label: '가이드', roman: 'IV',  desc: '입문, 안전, 그리고 문화.' },
+  { key: 'guide', label: '가이드', roman: 'III', desc: '입문, 안전, 그리고 문화.' },
 ];
 ---
 <BaseLayout title="위키">

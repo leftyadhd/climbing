@@ -1,0 +1,106 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const crags = await getCollection('crags');
+crags.sort((a, b) => a.data.title.localeCompare(b.data.title, 'ko'));
+
+const allCragRoutes = await getCollection('crag-routes');
+const allLogs = await getCollection('logs');
+
+const cragData = crags.map(crag => {
+  const routeEntry = allCragRoutes.find(cr => cr.id === crag.slug);
+  const logCount = allLogs.filter(l => l.data.crag === crag.slug).length;
+  return { crag, routeEntry, logCount };
+});
+---
+<BaseLayout title="암장">
+<div class="container">
+
+  <div class="eyebrow">Crags — 암장</div>
+  <h1>내가 오른 <em>바위들.</em></h1>
+
+  <ul class="crag-list">
+    {cragData.map(({ crag, routeEntry, logCount }) => (
+      <li>
+        <a href={`/crags/${crag.slug}/`} class="crag-row">
+          <div class="crag-left">
+            <span class="crag-title">{crag.data.title}</span>
+            {crag.data.summary && <span class="crag-summary">{crag.data.summary}</span>}
+          </div>
+          <div class="crag-right">
+            {crag.data.location && (
+              <span class="crag-region mono">{crag.data.location.region}</span>
+            )}
+            {routeEntry && (
+              <span class="crag-routes mono">{routeEntry.data.routes.length}R</span>
+            )}
+            {logCount > 0 && (
+              <span class="crag-logs mono">{logCount}회</span>
+            )}
+            {crag.data.rock_type && (
+              <span class="crag-rock">{crag.data.rock_type}</span>
+            )}
+          </div>
+        </a>
+      </li>
+    ))}
+  </ul>
+
+</div>
+
+<style>
+  h1 {
+    font-family: 'Fraunces', 'Hahmlet', serif;
+    font-weight: 400;
+    line-height: 1.05;
+    margin-bottom: 2.5rem;
+  }
+  h1 em { font-style: italic; color: var(--ochre); }
+
+  .crag-list { list-style: none; margin: 0; padding: 0; }
+  .crag-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 1.1rem 0.5rem;
+    border-bottom: 1px solid var(--rule);
+    border-top: none;
+    color: var(--ink);
+    transition: background 0.15s, padding 0.15s;
+  }
+  .crag-list li:first-child .crag-row { border-top: 1px solid var(--rule); }
+  .crag-row:hover { padding-left: 1rem; background: color-mix(in srgb, var(--ochre) 4%, transparent); color: var(--ink); }
+
+  .crag-left { min-width: 0; }
+  .crag-title {
+    font-family: 'Hahmlet', 'Fraunces', serif;
+    font-size: 1.15rem;
+    font-weight: 400;
+    display: block;
+  }
+  .crag-summary {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--stone-700);
+    margin-top: 0.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+  }
+
+  .crag-right {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-shrink: 0;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .crag-region { font-size: 0.75rem; color: var(--stone-500); }
+  .crag-routes { font-size: 0.75rem; color: var(--moss); }
+  .crag-logs { font-size: 0.75rem; color: var(--stone-500); }
+  .crag-rock { font-size: 0.75rem; color: var(--stone-500); }
+</style>
+</BaseLayout>

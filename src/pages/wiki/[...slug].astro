@@ -13,45 +13,19 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await entry.render();
 
-const cragSlug = entry.slug.split('/').pop();
+const entrySlug = entry.slug.split('/').pop();
 const allLogs = await getCollection('logs');
 
-// 암장 루트 데이터 로드
-const allCragRoutes = await getCollection('crag-routes');
-const cragRoutesEntry = entry.data.type === 'crag'
-  ? allCragRoutes.find(cr => cr.id === cragSlug) ?? null
-  : null;
-
-// 섹터별 그룹
-const sectorNames: string[] = cragRoutesEntry
-  ? [...new Set(cragRoutesEntry.data.routes.map(r => r.sector ?? '전체'))].sort()
+const relatedLogs = entry.data.type === 'technique'
+  ? allLogs
+      .filter(l => l.data.routes.some(r => r.techniques_used.includes(entrySlug!)))
+      .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
   : [];
-type CragRoute = typeof cragRoutesEntry extends null ? never : typeof cragRoutesEntry.data.routes[number];
-const routesBySector: Record<string, CragRoute[]> = {};
-if (cragRoutesEntry) {
-  for (const r of cragRoutesEntry.data.routes) {
-    const s = r.sector ?? '전체';
-    if (!routesBySector[s]) routesBySector[s] = [];
-    routesBySector[s].push(r);
-  }
-}
-
-let relatedLogs: typeof allLogs = [];
-if (entry.data.type === 'crag') {
-  relatedLogs = allLogs.filter(l => l.data.crag === cragSlug);
-} else if (entry.data.type === 'technique') {
-  relatedLogs = allLogs.filter(l =>
-    l.data.routes.some(r => r.techniques_used.includes(cragSlug!))
-  );
-}
-relatedLogs.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
 const typeLabel: Record<string, string> = {
-  crag: '암장',
   technique: '기술',
   gear: '장비',
   guide: '가이드',
-  route: '루트',
   term: '용어',
 };
 const diffLabel: Record<string, string> = {
@@ -101,50 +75,6 @@ let nextReads = allWikiForNext
     <p class="summary">{entry.data.summary}</p>
   )}
 
-  <!-- crag 전용 데이터 박스 -->
-  {entry.data.type === 'crag' && entry.data.location && (
-    <div class="data-box">
-      <div class="data-row">
-        <span class="data-label">위치</span>
-        <span>{entry.data.location.region} {entry.data.location.city && `— ${entry.data.location.city}`}</span>
-      </div>
-      <div class="data-row">
-        <span class="data-label">좌표</span>
-        <span class="mono">{entry.data.location.lat}°, {entry.data.location.lng}°</span>
-      </div>
-      {entry.data.rock_type && (
-        <div class="data-row">
-          <span class="data-label">암질</span>
-          <span>{entry.data.rock_type}</span>
-        </div>
-      )}
-      {entry.data.disciplines.length > 0 && (
-        <div class="data-row">
-          <span class="data-label">종류</span>
-          <span>{entry.data.disciplines.join(' · ')}</span>
-        </div>
-      )}
-      {entry.data.approach_minutes && (
-        <div class="data-row">
-          <span class="data-label">접근</span>
-          <span>{entry.data.approach_minutes}분</span>
-        </div>
-      )}
-      {entry.data.routes_count && (
-        <div class="data-row">
-          <span class="data-label">루트 수</span>
-          <span>약 {entry.data.routes_count}개</span>
-        </div>
-      )}
-      {entry.data.season_best.length > 0 && (
-        <div class="data-row">
-          <span class="data-label">시즌</span>
-          <span>{entry.data.season_best.join(' · ')}</span>
-        </div>
-      )}
-    </div>
-  )}
-
   <!-- technique 전용 -->
   {entry.data.type === 'technique' && (
     <div class="data-box">
@@ -191,56 +121,6 @@ let nextReads = allWikiForNext
     <div class="tags">
       {entry.data.tags.map(t => <span class="tag">{t}</span>)}
     </div>
-  )}
-
-  <!-- 암장 루트 테이블 -->
-  {cragRoutesEntry && (
-    <section class="routes-section">
-      <div class="eyebrow" style="margin-top:3rem;">Routes — 루트 목록</div>
-      {sectorNames.map(sector => (
-        <div class="sector-block">
-          {sectorNames.length > 1 && (
-            <div class="sector-label">{sector}</div>
-          )}
-          <table class="route-table">
-            <thead>
-              <tr>
-                <th class="col-num">#</th>
-                <th>이름</th>
-                <th class="col-grade">난이도</th>
-                <th class="col-len">길이</th>
-                <th class="col-style">스타일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {routesBySector[sector].map(r => (
-                <tr class={r.pitches.length > 0 ? 'row-multi' : ''}>
-                  <td class="col-num mono">{r.number ?? '—'}</td>
-                  <td>
-                    <span class="route-name">{r.name ?? '(미상)'}</span>
-                    {r.notes && <span class="route-note">{r.notes}</span>}
-                    {r.pitches.length > 0 && (
-                      <div class="pitch-inline">
-                        {r.pitches.map(p => (
-                          <span class="pitch-pip">
-                            P{p.number}{p.grade ? ` ${p.grade}` : ''}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td class="col-grade mono">{r.grade ?? '—'}</td>
-                  <td class="col-len mono">{r.length_m ? `${r.length_m}m` : (r.pitches_count ? `${r.pitches_count}P` : '—')}</td>
-                  <td class="col-style">
-                    {r.style && <span class="style-chip">{r.style}</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-    </section>
   )}
 
   <hr class="rule" />

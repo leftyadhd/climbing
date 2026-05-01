@@ -4,7 +4,7 @@ const wiki = defineCollection({
   type: 'content',
   schema: z.object({
     title: z.string(),
-    type: z.enum(['guide', 'technique', 'gear', 'crag', 'route', 'term']),
+    type: z.enum(['guide', 'technique', 'gear', 'term']),
     tags: z.array(z.string()).default([]),
     updated: z.date().optional(),
     summary: z.string().optional(),
@@ -19,8 +19,13 @@ const wiki = defineCollection({
     brand: z.string().optional(),
     price_krw: z.number().optional(),
     use_cases: z.array(z.string()).default([]),
+  }),
+});
 
-    // crag
+const crags = defineCollection({
+  type: 'content',
+  schema: z.object({
+    title: z.string(),
     location: z.object({
       region: z.string(),
       city: z.string().optional(),
@@ -30,22 +35,10 @@ const wiki = defineCollection({
     rock_type: z.string().optional(),
     disciplines: z.array(z.string()).default([]),
     approach_minutes: z.number().optional(),
-    routes_count: z.number().optional(),
     season_best: z.array(z.string()).default([]),
-
-    // route (wiki text doc — beta, history, description)
-    crag: z.string().optional(),
-    grade: z.string().optional(),
-    style: z.string().optional(),
-    length_m: z.number().optional(),
-    bolts: z.number().optional(),
-    pitches_count: z.number().nullish(),
-    pitches: z.array(z.object({
-      number: z.number(),
-      grade: z.string().nullish(),
-      length_m: z.number().nullish(),
-      description: z.string().nullish(),
-    })).default([]),
+    tags: z.array(z.string()).default([]),
+    summary: z.string().optional(),
+    updated: z.date().optional(),
   }),
 });
 
@@ -56,8 +49,8 @@ const logs = defineCollection({
     date: z.date(),
     type: z.literal('log').default('log'),
     crag: z.string().nullish(),
-    crew: z.array(z.string()).default([]),         // 함께 간 팀/그룹
-    partners: z.array(z.string()).default([]),     // 로프 파트너 (개인)
+    crew: z.array(z.string()).default([]),
+    partners: z.array(z.string()).default([]),
     weather: z.string().nullish(),
     tags: z.array(z.string()).default([]),
     photos: z.array(z.string()).default([]),
@@ -69,7 +62,7 @@ const logs = defineCollection({
       attempts: z.number().optional(),
       techniques_used: z.array(z.string()).default([]),
       notes: z.string().nullish(),
-      route_ref: z.string().nullish(),   // id in crag-routes collection
+      route_ref: z.string().nullish(),
       pitches: z.array(z.object({
         number: z.number(),
         grade: z.string().nullish(),
@@ -81,13 +74,12 @@ const logs = defineCollection({
   }),
 });
 
-// 암장별 루트 데이터 — 정형화된 구조
 const cragRoutes = defineCollection({
   type: 'data',
   schema: z.object({
-    crag: z.string(),   // wiki crag slug suffix (예: 수락산-내원암)
+    crag: z.string(),
     routes: z.array(z.object({
-      id: z.string(),              // route_ref에서 참조하는 키
+      id: z.string(),
       number: z.number().nullish(),
       name: z.string().nullish(),
       sector: z.string().nullish(),
@@ -123,4 +115,4 @@ const devices = defineCollection({
   }),
 });
 
-export const collections = { wiki, logs, 'crag-routes': cragRoutes, devices };
+export const collections = { wiki, crags, logs, 'crag-routes': cragRoutes, devices };
