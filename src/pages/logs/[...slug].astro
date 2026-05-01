@@ -40,6 +40,21 @@ const statusClass: Record<string, string> = {
   attempt: 'project',
   failed: 'fail',
 };
+
+const pitchStatusLabel: Record<string, string> = {
+  onsight: 'OS',
+  clean: 'Clean',
+  fell: 'Fell',
+  aided: 'Aid',
+  skipped: '—',
+};
+const pitchStatusClass: Record<string, string> = {
+  onsight: 'send',
+  clean: 'send',
+  fell: 'fail',
+  aided: 'project',
+  skipped: 'skip',
+};
 ---
 <BaseLayout title={log.data.title}>
 <article data-pagefind-body>
@@ -112,26 +127,59 @@ const statusClass: Record<string, string> = {
         </thead>
         <tbody>
           {log.data.routes.map(r => (
-            <tr>
-              <td>
-                <div class="route-name">{r.name}</div>
-                {r.notes && <div class="route-notes">{r.notes}</div>}
-                {r.techniques_used.length > 0 && (
-                  <div class="route-techniques">
-                    Used: {r.techniques_used.map(t => (
-                      <a href={`/wiki/climbing-all/04-techniques/${t}/`}>{t}</a>
-                    ))}
+            <>
+              <tr>
+                <td>
+                  <div class="route-name">
+                    {r.route_ref
+                      ? <a href={`/wiki/climbing-all/05-routes/${r.route_ref}/`}>{r.name}</a>
+                      : r.name
+                    }
+                    {r.pitches.length > 0 && (
+                      <span class="multi-badge">멀티 {r.pitches.length}P</span>
+                    )}
                   </div>
-                )}
-              </td>
-              <td class="col-grade mono">{r.grade || '—'}</td>
-              <td class="col-status">
-                <span class={`status-chip status-${statusClass[r.status]}`}>
-                  {statusLabel[r.status]}
-                </span>
-                {r.attempts && <div class="attempts">{r.attempts} tries</div>}
-              </td>
-            </tr>
+                  {r.notes && <div class="route-notes">{r.notes}</div>}
+                  {r.techniques_used.length > 0 && (
+                    <div class="route-techniques">
+                      Used: {r.techniques_used.map(t => (
+                        <a href={`/wiki/climbing-all/04-techniques/${t}/`}>{t}</a>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td class="col-grade mono">{r.grade || '—'}</td>
+                <td class="col-status">
+                  <span class={`status-chip status-${statusClass[r.status]}`}>
+                    {statusLabel[r.status]}
+                  </span>
+                  {r.attempts && <div class="attempts">{r.attempts} tries</div>}
+                </td>
+              </tr>
+              {r.pitches.length > 0 && (
+                <tr class="pitch-row">
+                  <td colspan={3}>
+                    <div class="pitch-grid">
+                      {r.pitches.map(p => (
+                        <div class={`pitch-card ${p.status ? `pitch-${pitchStatusClass[p.status]}` : ''}`}>
+                          <div class="pitch-header">
+                            <span class="pitch-num">P{p.number}</span>
+                            {p.grade && <span class="pitch-grade mono">{p.grade}</span>}
+                            {p.length_m && <span class="pitch-len mono">{p.length_m}m</span>}
+                            {p.status && (
+                              <span class={`pitch-status-chip psc-${pitchStatusClass[p.status]}`}>
+                                {pitchStatusLabel[p.status]}
+                              </span>
+                            )}
+                          </div>
+                          {p.notes && <div class="pitch-notes">{p.notes}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </>
           ))}
         </tbody>
       </table>
@@ -288,6 +336,73 @@ const statusClass: Record<string, string> = {
     font-size: 0.72rem;
     color: var(--stone-500);
     margin-top: 0.3rem;
+  }
+
+  /* 멀티피치 배지 */
+  .multi-badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    padding: 0.15em 0.5em;
+    background: var(--stone-100);
+    color: var(--stone-700);
+    border: 1px solid var(--rule-strong);
+    margin-left: 0.6em;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+  }
+
+  /* 피치 그리드 */
+  .pitch-row td { padding: 0 0 1.2rem; border-bottom: 1px solid var(--rule); }
+  .pitch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.5rem;
+  }
+  .pitch-card {
+    border: 1px solid var(--rule);
+    padding: 0.6rem 0.8rem;
+    background: var(--paper-soft);
+  }
+  .pitch-card.pitch-send  { border-left: 3px solid var(--moss); }
+  .pitch-card.pitch-fail  { border-left: 3px solid var(--stone-300); }
+  .pitch-card.pitch-project { border-left: 3px solid var(--ochre); }
+  .pitch-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .pitch-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--stone-700);
+  }
+  .pitch-grade, .pitch-len {
+    font-size: 0.72rem;
+    color: var(--stone-500);
+  }
+  .pitch-status-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    padding: 0.1em 0.4em;
+    border: 1px solid;
+    margin-left: auto;
+  }
+  .psc-send    { color: var(--moss); border-color: color-mix(in srgb, var(--moss) 50%, transparent); }
+  .psc-fail    { color: var(--stone-500); border-color: var(--rule-strong); }
+  .psc-project { color: var(--ochre); border-color: color-mix(in srgb, var(--ochre) 50%, transparent); }
+  .psc-skip    { color: var(--stone-300); border-color: var(--rule); }
+  .pitch-notes {
+    font-size: 0.78rem;
+    color: var(--stone-700);
+    margin-top: 0.35rem;
+    line-height: 1.4;
   }
 
   @media (max-width: 640px) {
