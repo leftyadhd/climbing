@@ -1,0 +1,61 @@
+crag: 수락산-내원암
+routes:
+  - id: 후벽-1
+    number: 1
+    sector: 후벽
+    grade: "5.10a"
+    length_m: 30
+    style: sport
+  - id: 슬래임
+    number: 2
+    name: 슬래임
+    sector: 후벽
+    grade: "5.10c"
+    length_m: 30
+    style: sport
+  - id: 후벽-3
+    number: 3
+    sector: 후벽
+    grade: "5.9"
+    length_m: 30
+    style: sport
+  - id: 예배원
+    number: 4
+    name: 예배원
+    sector: 후벽
+    grade: "5.10b"
+    length_m: 30
+    style: sport
+  - id: 후벽-5
+    number: 5
+    sector: 후벽
+    grade: "5.10a"
+    length_m: 30
+    style: sport
+  - id: 후벽-6
+    number: 6
+    sector: 후벽
+    grade: "5.10a"
+    length_m: 30
+    style: sport
+  - id: 갈기를
+    number: 7
+    name: 갈기를
+    sector: 후벽
+    grade: "5.11a"
+    length_m: 30
+    style: sport
+  - id: 방악
+    number: 8
+    name: 방악
+    sector: 후벽
+    grade: "5.8"
+    length_m: 30
+    style: sport
+  - id: 페미트8
+    number: 9
+    name: 페미트8
+    sector: 후벽
+    grade: "5.11b"
+    length_m: 35
+    style: sport

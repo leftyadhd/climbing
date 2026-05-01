@@ -16,6 +16,26 @@ const { Content } = await entry.render();
 const cragSlug = entry.slug.split('/').pop();
 const allLogs = await getCollection('logs');
 
+// 암장 루트 데이터 로드
+const allCragRoutes = await getCollection('crag-routes');
+const cragRoutesEntry = entry.data.type === 'crag'
+  ? allCragRoutes.find(cr => cr.id === cragSlug) ?? null
+  : null;
+
+// 섹터별 그룹
+const sectorNames: string[] = cragRoutesEntry
+  ? [...new Set(cragRoutesEntry.data.routes.map(r => r.sector ?? '전체'))].sort()
+  : [];
+type CragRoute = typeof cragRoutesEntry extends null ? never : typeof cragRoutesEntry.data.routes[number];
+const routesBySector: Record<string, CragRoute[]> = {};
+if (cragRoutesEntry) {
+  for (const r of cragRoutesEntry.data.routes) {
+    const s = r.sector ?? '전체';
+    if (!routesBySector[s]) routesBySector[s] = [];
+    routesBySector[s].push(r);
+  }
+}
+
 let relatedLogs: typeof allLogs = [];
 if (entry.data.type === 'crag') {
   relatedLogs = allLogs.filter(l => l.data.crag === cragSlug);
@@ -171,6 +191,56 @@ let nextReads = allWikiForNext
     <div class="tags">
       {entry.data.tags.map(t => <span class="tag">{t}</span>)}
     </div>
+  )}
+
+  <!-- 암장 루트 테이블 -->
+  {cragRoutesEntry && (
+    <section class="routes-section">
+      <div class="eyebrow" style="margin-top:3rem;">Routes — 루트 목록</div>
+      {sectorNames.map(sector => (
+        <div class="sector-block">
+          {sectorNames.length > 1 && (
+            <div class="sector-label">{sector}</div>
+          )}
+          <table class="route-table">
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th>이름</th>
+                <th class="col-grade">난이도</th>
+                <th class="col-len">길이</th>
+                <th class="col-style">스타일</th>
+              </tr>
+            </thead>
+            <tbody>
+              {routesBySector[sector].map(r => (
+                <tr class={r.pitches.length > 0 ? 'row-multi' : ''}>
+                  <td class="col-num mono">{r.number ?? '—'}</td>
+                  <td>
+                    <span class="route-name">{r.name ?? '(미상)'}</span>
+                    {r.notes && <span class="route-note">{r.notes}</span>}
+                    {r.pitches.length > 0 && (
+                      <div class="pitch-inline">
+                        {r.pitches.map(p => (
+                          <span class="pitch-pip">
+                            P{p.number}{p.grade ? ` ${p.grade}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td class="col-grade mono">{r.grade ?? '—'}</td>
+                  <td class="col-len mono">{r.length_m ? `${r.length_m}m` : (r.pitches_count ? `${r.pitches_count}P` : '—')}</td>
+                  <td class="col-style">
+                    {r.style && <span class="style-chip">{r.style}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </section>
   )}
 
   <hr class="rule" />
@@ -367,10 +437,86 @@ let nextReads = allWikiForNext
     -webkit-box-orient: vertical;
   }
 
+  /* 루트 테이블 */
+  .routes-section { margin-bottom: 0; }
+  .sector-block { margin-bottom: 2rem; }
+  .sector-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .route-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  .route-table th {
+    text-align: left;
+    padding: 0.7rem 0.5rem;
+    border-bottom: 2px solid var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    font-weight: 500;
+  }
+  .route-table td {
+    padding: 0.85rem 0.5rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: middle;
+  }
+  .route-table tr:last-child td { border-bottom: none; }
+  .route-table tr:hover td { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
+  .row-multi td { vertical-align: top; }
+  .col-num  { width: 36px; color: var(--stone-500); }
+  .col-grade { width: 80px; }
+  .col-len  { width: 70px; color: var(--stone-700); }
+  .col-style { width: 80px; }
+  .route-name {
+    font-family: 'Hahmlet', serif;
+    font-size: 1rem;
+    font-weight: 400;
+    display: block;
+  }
+  .route-note {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--stone-700);
+    margin-top: 0.15rem;
+  }
+  .pitch-inline {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin-top: 0.4rem;
+  }
+  .pitch-pip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    padding: 0.15em 0.5em;
+    background: var(--stone-100);
+    color: var(--stone-700);
+    border: 1px solid var(--rule);
+  }
+  .style-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    color: var(--stone-500);
+  }
+
   @media (max-width: 640px) {
     .data-row { grid-template-columns: 1fr; gap: 0.2rem; padding: 0.6rem 0; }
     .related-list a { grid-template-columns: 1fr; gap: 0.3rem; padding: 0.8rem 0; }
     .next-grid { grid-template-columns: 1fr; }
+    .col-len, .col-style { display: none; }
   }
 </style>
 </BaseLayout>

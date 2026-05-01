@@ -1,0 +1,26 @@
+crag: 인수봉
+routes:
+  - id: 거봉길
+    name: 거봉길
+    grade: "5.8"
+    style: trad
+    pitches_count: 3
+    pitches:
+      - number: 1
+        grade: "5.8"
+      - number: 2
+        grade: "5.8"
+      - number: 3
+        grade: "5.8"
+  - id: 취나드-B
+    name: 취나드 B
+    grade: "5.8"
+    style: trad
+    pitches_count: 3
+    pitches:
+      - number: 1
+        grade: "5.8"
+      - number: 2
+        grade: "5.8"
+      - number: 3
+        grade: "5.8"

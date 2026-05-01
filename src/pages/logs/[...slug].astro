@@ -22,6 +22,19 @@ const cragEntry = log.data.crag
   ? allWiki.find(w => w.data.type === 'crag' && w.slug.endsWith(log.data.crag!))
   : null;
 
+// 암장 루트 canonical 데이터 로드
+const allCragRoutes = await getCollection('crag-routes');
+const cragRoutesEntry = log.data.crag
+  ? allCragRoutes.find(cr => cr.id === log.data.crag) ?? null
+  : null;
+type CanonicalRoute = { id: string; name?: string | null; grade?: string | null; length_m?: number | null; pitches_count?: number | null };
+const canonicalMap = new Map<string, CanonicalRoute>();
+if (cragRoutesEntry) {
+  for (const r of cragRoutesEntry.data.routes) {
+    canonicalMap.set(r.id, r);
+  }
+}
+
 const statusLabel: Record<string, string> = {
   onsight: 'Onsight',
   flash: 'Flash',
@@ -131,14 +144,15 @@ const pitchStatusClass: Record<string, string> = {
               <tr>
                 <td>
                   <div class="route-name">
-                    {r.route_ref
-                      ? <a href={`/wiki/climbing-all/05-routes/${r.route_ref}/`}>{r.name}</a>
-                      : r.name
-                    }
+                    {r.name}
                     {r.pitches.length > 0 && (
                       <span class="multi-badge">멀티 {r.pitches.length}P</span>
                     )}
                   </div>
+                  {(() => {
+                    const c = r.route_ref ? canonicalMap.get(r.route_ref) : null;
+                    return c?.length_m ? <div class="route-canonical">{c.length_m}m</div> : null;
+                  })()}
                   {r.notes && <div class="route-notes">{r.notes}</div>}
                   {r.techniques_used.length > 0 && (
                     <div class="route-techniques">
@@ -297,6 +311,13 @@ const pitchStatusClass: Record<string, string> = {
   .route-name {
     font-family: 'Fraunces', serif;
     font-size: 1.1rem;
+  }
+  .route-canonical {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--stone-500);
+    margin-top: 0.15rem;
+    letter-spacing: 0.03em;
   }
   .route-notes {
     font-size: 0.85rem;

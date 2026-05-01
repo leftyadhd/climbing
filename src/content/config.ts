@@ -4,14 +4,7 @@ const wiki = defineCollection({
   type: 'content',
   schema: z.object({
     title: z.string(),
-    type: z.enum([
-      'guide',
-      'technique',
-      'gear',
-      'crag',
-      'route',
-      'term',
-    ]),
+    type: z.enum(['guide', 'technique', 'gear', 'crag', 'route', 'term']),
     tags: z.array(z.string()).default([]),
     updated: z.date().optional(),
     summary: z.string().optional(),
@@ -40,7 +33,7 @@ const wiki = defineCollection({
     routes_count: z.number().optional(),
     season_best: z.array(z.string()).default([]),
 
-    // route
+    // route (wiki text doc — beta, history, description)
     crag: z.string().optional(),
     grade: z.string().optional(),
     style: z.string().optional(),
@@ -75,7 +68,7 @@ const logs = defineCollection({
       attempts: z.number().optional(),
       techniques_used: z.array(z.string()).default([]),
       notes: z.string().nullish(),
-      route_ref: z.string().nullish(),
+      route_ref: z.string().nullish(),   // id in crag-routes collection
       pitches: z.array(z.object({
         number: z.number(),
         grade: z.string().nullish(),
@@ -84,6 +77,32 @@ const logs = defineCollection({
         notes: z.string().nullish(),
       })).default([]),
     })).default([]),
+  }),
+});
+
+// 암장별 루트 데이터 — 정형화된 구조
+const cragRoutes = defineCollection({
+  type: 'data',
+  schema: z.object({
+    crag: z.string(),   // wiki crag slug suffix (예: 수락산-내원암)
+    routes: z.array(z.object({
+      id: z.string(),              // route_ref에서 참조하는 키
+      number: z.number().nullish(),
+      name: z.string().nullish(),
+      sector: z.string().nullish(),
+      grade: z.string().nullish(),
+      length_m: z.number().nullish(),
+      style: z.enum(['sport', 'trad', 'boulder', 'multi-pitch']).nullish(),
+      bolts: z.number().nullish(),
+      pitches_count: z.number().nullish(),
+      pitches: z.array(z.object({
+        number: z.number(),
+        grade: z.string().nullish(),
+        length_m: z.number().nullish(),
+        description: z.string().nullish(),
+      })).default([]),
+      notes: z.string().nullish(),
+    })),
   }),
 });
 
@@ -103,4 +122,4 @@ const devices = defineCollection({
   }),
 });
 
-export const collections = { wiki, logs, devices };
+export const collections = { wiki, logs, 'crag-routes': cragRoutes, devices };
