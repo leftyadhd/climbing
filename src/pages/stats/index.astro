@@ -1,0 +1,1282 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const allLogs = (await getCollection('logs')).sort(
+  (a, b) => a.data.date.valueOf() - b.data.date.valueOf()
+);
+const climbLogs = allLogs.filter(l => l.data.type !== 'misc');
+
+const allCrags = await getCollection('crags');
+const cragTitleMap = new Map<string, string>();
+for (const c of allCrags) {
+  const key = c.id.replace(/\.md$/, '').split('/').pop()!.normalize('NFC');
+  cragTitleMap.set(key, c.data.title);
+}
+const getCragTitle = (slug: string) =>
+  cragTitleMap.get(slug.normalize('NFC')) ?? slug;
+
+const allRoutes = climbLogs.flatMap(l => l.data.routes);
+const sendSet = new Set(['onsight', 'flash', 'redpoint', 'send']);
+const sends = allRoutes.filter(r => sendSet.has(r.status));
+const logsWithRoutes = climbLogs.filter(l => l.data.routes.length > 0);
+const logsWithoutRoutes = climbLogs
+  .filter(l => l.data.routes.length === 0)
+  .map(l => ({ slug: l.slug, date: l.data.date, crag: l.data.crag ?? null, title: l.data.title }))
+  .sort((a, b) => b.date.valueOf() - a.date.valueOf());
+const routeFillRate = climbLogs.length > 0
+  ? Math.round((logsWithRoutes.length / climbLogs.length) * 100) : 0;
+
+const partnerFreq = new Map<string, number>();
+for (const log of allLogs) {
+  for (const p of log.data.partners) {
+    if (p && p !== '게스트') partnerFreq.set(p, (partnerFreq.get(p) ?? 0) + 1);
+  }
+}
+const topPartners = [...partnerFreq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 18);
+const maxPartnerCount = topPartners.length > 0 ? topPartners[0][1] : 1;
+
+const cragFreq = new Map<string, number>();
+for (const log of climbLogs) {
+  if (log.data.crag) cragFreq.set(log.data.crag, (cragFreq.get(log.data.crag) ?? 0) + 1);
+}
+const topCrags = [...cragFreq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+const maxCragCount = topCrags.length > 0 ? topCrags[0][1] : 1;
+
+const statusBuckets = new Map<string, number>();
+for (const r of allRoutes) statusBuckets.set(r.status, (statusBuckets.get(r.status) ?? 0) + 1);
+const totalRoutes = allRoutes.length;
+
+const now = new Date();
+const firstClimbDate = climbLogs.length > 0 ? climbLogs[0].data.date : now;
+type MonthEntry = { year: number; month: number; label: string; newYear: boolean; count: number };
+const months: MonthEntry[] = [];
+const cur = new Date(firstClimbDate.getFullYear(), firstClimbDate.getMonth(), 1);
+const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+while (cur <= endMonth) {
+  const y = cur.getFullYear();
+  const m = cur.getMonth();
+  months.push({
+    year: y, month: m + 1,
+    label: `${m + 1}월`,
+    newYear: m === 0,
+    count: climbLogs.filter(l => l.data.date.getFullYear() === y && l.data.date.getMonth() === m).length,
+  });
+  cur.setMonth(cur.getMonth() + 1);
+}
+const maxMonthCount = Math.max(...months.map(m => m.count), 1);
+
+const activeProjects = climbLogs.flatMap(log =>
+  log.data.routes.filter(r => r.status === 'projecting').map(r => ({
+    name: r.name ?? r.route_ref ?? '(미상)', grade: r.grade, attempts: r.attempts,
+    logSlug: log.slug, logDate: log.data.date,
+    crag: log.data.crag ? getCragTitle(log.data.crag) : null,
+  }))
+);
+
+const uniqueCragCount = new Set(climbLogs.filter(l => l.data.crag).map(l => l.data.crag)).size;
+const uniquePartnerCount = partnerFreq.size;
+const firstDate = climbLogs[0]?.data.date;
+const lastDate = climbLogs[climbLogs.length - 1]?.data.date;
+const daysSinceStart = firstDate
+  ? Math.floor((now.valueOf() - firstDate.valueOf()) / (1000 * 60 * 60 * 24)) : 0;
+const avgPerMonth = months.length > 0 ? (climbLogs.length / months.length).toFixed(1) : '0';
+const sendRate = totalRoutes > 0 ? Math.round((sends.length / totalRoutes) * 100) : 0;
+
+// 인공암장(gym) 통계
+const gymCragSlugs = new Set(
+  allCrags
+    .filter(c => c.data.crag_type.includes('gym'))
+    .map(c => c.id.replace(/\.md$/, '').split('/').pop()!.normalize('NFC'))
+);
+const gymLogs = climbLogs.filter(l => l.data.crag && gymCragSlugs.has(l.data.crag.normalize('NFC')));
+const gymRoutes = gymLogs.flatMap(l => l.data.routes);
+const gymStyleCount = { '볼더링': 0, '지구력': 0, '리드': 0 };
+for (const r of gymRoutes) {
+  if (r.style === '볼더링') gymStyleCount['볼더링']++;
+  else if (r.style === '지구력') gymStyleCount['지구력']++;
+  else if (r.style === '리드') gymStyleCount['리드']++;
+}
+const gymCragFreq = new Map<string, number>();
+for (const log of gymLogs) {
+  if (log.data.crag) {
+    const k = log.data.crag.normalize('NFC');
+    gymCragFreq.set(k, (gymCragFreq.get(k) ?? 0) + 1);
+  }
+}
+const topGymCrags = [...gymCragFreq.entries()].sort((a, b) => b[1] - a[1]);
+const maxGymCount = topGymCrags.length > 0 ? topGymCrags[0][1] : 1;
+
+const fmtPeriod = (d: Date) => `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}`;
+
+// Grade timeline (sport/trad only — no V-grade bouldering)
+function parseGradeNum(grade: string | null | undefined): number {
+  if (!grade) return -1;
+  const m = grade.match(/5\.(\d+)([a-dA-D]?)/i);
+  if (!m) return -1;
+  const base = parseInt(m[1], 10);
+  const sub = m[2] ? { a: 0, b: 1, c: 2, d: 3 }[m[2].toLowerCase() as 'a'|'b'|'c'|'d'] ?? 0 : 0;
+  return base * 4 + sub;
+}
+function gradeLabel(num: number): string {
+  const major = Math.floor(num / 4);
+  const sub = num % 4;
+  return sub === 0 ? `5.${major}` : `5.${major}${'abcd'[sub]}`;
+}
+
+interface GradePoint { date: Date; grade: string; gradeNum: number; logSlug: string }
+const gradeTimeline: GradePoint[] = [];
+let runningMax = -1;
+for (const log of climbLogs) {
+  // PR 라인 — 모든 완등 기준 (선등/톱로핑 무관)
+  const sends5x = log.data.routes
+    .filter(r => sendSet.has(r.status) && parseGradeNum(r.grade) >= 0)
+    .map(r => parseGradeNum(r.grade));
+  if (sends5x.length === 0) continue;
+  const sessionMax = Math.max(...sends5x);
+  if (sessionMax > runningMax) {
+    runningMax = sessionMax;
+    gradeTimeline.push({ date: log.data.date, grade: gradeLabel(sessionMax), gradeNum: sessionMax, logSlug: log.slug });
+  }
+}
+// 루트별 도트 — style: '선등' 만 파란 점, 나머지는 기본(녹색)
+interface RouteDot { date: Date; gradeNum: number; grade: string; logSlug: string; isLead: boolean; isPR: boolean }
+const routeDots: RouteDot[] = [];
+{
+  let pr = -1;
+  for (const log of climbLogs) {
+    const graded = log.data.routes.filter(r => sendSet.has(r.status) && parseGradeNum(r.grade) >= 0);
+    for (const r of graded) {
+      const gn = parseGradeNum(r.grade);
+      const isLead = r.style === '선등';
+      const isPR = gn > pr;
+      if (gn > pr) pr = gn;
+      routeDots.push({ date: log.data.date, gradeNum: gn, grade: gradeLabel(gn), logSlug: log.slug, isLead, isPR });
+    }
+  }
+}
+
+const hasGradeData = routeDots.length > 0;
+const chartW = 800, chartH = 220;
+const padL = 52, padR = 20, padT = 16, padB = 32;
+const innerW = chartW - padL - padR;
+const innerH = chartH - padT - padB;
+
+let minGN = 0, maxGN = 0, xDomain: [Date, Date] = [new Date(), new Date()];
+if (hasGradeData) {
+  const nums = routeDots.map(d => d.gradeNum);
+  minGN = Math.max(0, Math.min(...nums) - 1);
+  maxGN = Math.max(...nums) + 1;
+  xDomain = [climbLogs[0].data.date, climbLogs[climbLogs.length - 1].data.date];
+}
+const xScale = (d: Date) => {
+  const [a, b] = xDomain;
+  const t = b.valueOf() - a.valueOf();
+  return t === 0 ? padL : padL + ((d.valueOf() - a.valueOf()) / t) * innerW;
+};
+const yScale = (g: number) => {
+  const range = maxGN - minGN || 1;
+  return padT + innerH - ((g - minGN) / range) * innerH;
+};
+
+// Y-axis ticks: one per major grade within range
+const yTicks: { label: string; y: number }[] = [];
+if (hasGradeData) {
+  const minMajor = Math.floor(minGN / 4);
+  const maxMajor = Math.ceil(maxGN / 4);
+  for (let major = minMajor; major <= maxMajor; major++) {
+    const gn = major * 4;
+    if (gn < minGN || gn > maxGN) continue;
+    yTicks.push({ label: `5.${major}`, y: yScale(gn) });
+  }
+}
+
+// PR step line path
+let prLinePath = '';
+if (gradeTimeline.length > 0) {
+  const pts = gradeTimeline.map(p => ({ x: xScale(p.date), y: yScale(p.gradeNum) }));
+  prLinePath = pts.map((p, i) => {
+    if (i === 0) return `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    const prev = pts[i - 1];
+    return `H ${p.x.toFixed(1)} V ${p.y.toFixed(1)}`;
+  }).join(' ');
+  // extend to end of chart
+  prLinePath += ` H ${(padL + innerW).toFixed(1)}`;
+}
+
+// SVG Donut
+function polarToXY(cx: number, cy: number, r: number, deg: number) {
+  const rad = (deg - 90) * (Math.PI / 180);
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+interface DonutSeg { label: string; count: number; color: string; path: string }
+const donutSegs: DonutSeg[] = [];
+if (totalRoutes > 0) {
+  const defs = [
+    { label: '완등', count: sends.length, color: '#00e87a' },
+    { label: '프로젝팅', count: statusBuckets.get('projecting') ?? 0, color: '#1e3a2a' },
+    { label: '미완등', count: (statusBuckets.get('attempt')??0)+(statusBuckets.get('failed')??0), color: '#2a2a2a' },
+  ].filter(s => s.count > 0);
+  let angle = 0;
+  for (const seg of defs) {
+    const sweep = (seg.count / totalRoutes) * 358;
+    let path: string;
+    if (sweep >= 357) {
+      path = `M 50 14 A 36 36 0 1 1 49.999 14`;
+    } else {
+      const s = polarToXY(50, 50, 36, angle);
+      const e = polarToXY(50, 50, 36, angle + sweep);
+      path = `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A 36 36 0 ${sweep > 180 ? 1 : 0} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+    }
+    donutSegs.push({ ...seg, path });
+    angle += sweep + 1;
+  }
+}
+
+// ── Grade Pyramid ──
+interface PyramidRow { label: string; gradeNum: number; onsight: number; flash: number; redpoint: number; send: number; total: number }
+const pyramidMap = new Map<number, { onsight: number; flash: number; redpoint: number; send: number }>();
+for (const r of allRoutes) {
+  if (!sendSet.has(r.status)) continue;
+  const gn = parseGradeNum(r.grade);
+  if (gn < 0) continue;
+  const bucket = pyramidMap.get(gn) ?? { onsight: 0, flash: 0, redpoint: 0, send: 0 };
+  if (r.status === 'onsight') bucket.onsight++;
+  else if (r.status === 'flash') bucket.flash++;
+  else if (r.status === 'redpoint') bucket.redpoint++;
+  else bucket.send++;
+  pyramidMap.set(gn, bucket);
+}
+const pyramidRows: PyramidRow[] = [...pyramidMap.entries()]
+  .sort((a, b) => b[0] - a[0])
+  .map(([gn, c]) => ({
+    label: gradeLabel(gn), gradeNum: gn,
+    onsight: c.onsight, flash: c.flash, redpoint: c.redpoint, send: c.send,
+    total: c.onsight + c.flash + c.redpoint + c.send,
+  }));
+const maxPyramidTotal = Math.max(...pyramidRows.map(r => r.total), 1);
+
+// ── Personal Best ──
+const pbByStat = (statuses: string[]): string | null => {
+  const grades = allRoutes.filter(r => statuses.includes(r.status)).map(r => parseGradeNum(r.grade)).filter(g => g >= 0);
+  return grades.length > 0 ? gradeLabel(Math.max(...grades)) : null;
+};
+const pbOnsight = pbByStat(['onsight']);
+const pbFlash = pbByStat(['onsight', 'flash']);
+const pbRedpoint = pbByStat(['onsight', 'flash', 'redpoint', 'send']);
+---
+
+<BaseLayout title="Stats">
+<div class="stats-root">
+
+  <!-- ══════════════════════════════════ HERO ══ -->
+  <div class="hero">
+    <div class="hero-head">
+      <span class="hero-eyebrow mono">Stats · 기록 분석</span>
+      {firstDate && lastDate && (
+        <span class="hero-period mono">{fmtPeriod(firstDate)} → {fmtPeriod(lastDate)}</span>
+      )}
+    </div>
+    <div class="hero-numbers">
+      <div class="hnum">
+        <div class="hnum-n">{climbLogs.length}</div>
+        <div class="hnum-l">세션</div>
+        <div class="hnum-s mono">{avgPerMonth}/월</div>
+      </div>
+      <div class="hdiv"></div>
+      <div class="hnum">
+        <div class="hnum-n">{sends.length}</div>
+        <div class="hnum-l">완등</div>
+        <div class="hnum-s mono">{totalRoutes > 0 ? `${sendRate}%` : '—'}</div>
+      </div>
+      <div class="hdiv"></div>
+      <div class="hnum">
+        <div class="hnum-n">{uniqueCragCount}</div>
+        <div class="hnum-l">암장</div>
+        <div class="hnum-s mono">/ {allCrags.length}개 등록</div>
+      </div>
+      <div class="hdiv"></div>
+      <div class="hnum">
+        <div class="hnum-n">{uniquePartnerCount}</div>
+        <div class="hnum-l">파트너</div>
+        <div class="hnum-s mono">함께 오른</div>
+      </div>
+      <div class="hdiv"></div>
+      <div class="hnum">
+        <div class="hnum-n">{daysSinceStart}</div>
+        <div class="hnum-l">일째</div>
+        <div class="hnum-s mono">등반 중</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ DATA COMPLETENESS ══ -->
+  {logsWithoutRoutes.length > 0 && (
+    <section class="completeness-bar">
+      <div class="cb-inner">
+        <div class="cb-left">
+          <span class="cb-label mono">루트 기입률</span>
+          <div class="cb-track">
+            <div class="cb-fill" style={`width:${routeFillRate}%`}></div>
+          </div>
+          <span class="cb-pct mono">{routeFillRate}%</span>
+          <span class="cb-sub mono">({logsWithRoutes.length}/{climbLogs.length}세션)</span>
+        </div>
+        <details class="cb-detail">
+          <summary class="cb-summary mono">미기입 {logsWithoutRoutes.length}건 ▾</summary>
+          <div class="cb-list">
+            {logsWithoutRoutes.map(l => {
+              const d = l.date;
+              const ds = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+              return (
+                <a href={`/logs/${l.slug}/`} class="cb-item">
+                  <span class="cb-item-date mono">{ds}</span>
+                  <span class="cb-item-crag">{l.crag ?? '암장 미기입'}</span>
+                </a>
+              );
+            })}
+          </div>
+        </details>
+      </div>
+    </section>
+  )}
+
+  <!-- ══════════════════════════════ ACTIVITY ══ -->
+  <section class="section">
+    <div class="section-inner">
+      <div class="section-hd">
+        <div class="s-eyebrow">Activity</div>
+        <h2 class="s-title">월별 세션</h2>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-yaxis">
+          {[maxMonthCount, Math.ceil(maxMonthCount * 0.5), 0].map(v => (
+            <div class="yval mono">{v}</div>
+          ))}
+        </div>
+        <div class="chart-area">
+          <div class="chart-grid-lines">
+            <div class="gline"></div>
+            <div class="gline"></div>
+            <div class="gline"></div>
+          </div>
+          <div class="month-bars">
+            {months.map(m => (
+              <div class="mcol" title={`${m.year}년 ${m.label} — ${m.count}세션`}>
+                {m.newYear && <div class="yr-mark mono">{m.year}</div>}
+                <div class="mbar-wrap">
+                  <div
+                    class={`mbar${m.count === 0 ? ' mbar-empty' : ''}`}
+                    style={`height:${m.count === 0 ? '2px' : `${Math.round((m.count/maxMonthCount)*100)}%`}`}
+                  >
+                    {m.count > 0 && <span class="mbar-tip mono">{m.count}</span>}
+                  </div>
+                </div>
+                <div class="mlabel mono">{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════ CRAGS + PARTNERS ══ -->
+  <section class="section section-tinted">
+    <div class="section-inner two-col">
+
+      <div class="col-panel">
+        <div class="s-eyebrow">Crags</div>
+        <h2 class="s-title">암장별 방문</h2>
+        {topCrags.length > 0 ? (
+          <div class="crag-bars">
+            {topCrags.map(([slug, count]) => (
+              <div class="cbar">
+                <div class="cbar-hd">
+                  <a href={`/crags/${slug}/`} class="cbar-name">{getCragTitle(slug)}</a>
+                  <span class="cbar-ct mono">{count}회</span>
+                </div>
+                <div class="cbar-track">
+                  <div class="cbar-fill" style={`width:${Math.round((count/maxCragCount)*100)}%`}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p class="empty-note">crag 필드를 채우면 표시됩니다.</p>}
+      </div>
+
+      <div class="col-panel">
+        <div class="s-eyebrow">Partners</div>
+        <h2 class="s-title">함께 오른 파트너</h2>
+        {topPartners.length > 0 ? (
+          <div class="pchips">
+            {topPartners.map(([name, count]) => (
+              <div
+                class="pchip"
+                style={`--freq: ${(count / maxPartnerCount).toFixed(2)}`}
+                title={`${name} — ${count}회`}
+              >
+                <span class="pchip-n">{name}</span>
+                <span class="pchip-c mono">{count}</span>
+              </div>
+            ))}
+          </div>
+        ) : <p class="empty-note">partners 필드를 채우면 표시됩니다.</p>}
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════ RESULTS ══ -->
+  {totalRoutes > 0 && (
+    <section class="section">
+      <div class="section-inner">
+        <div class="section-hd">
+          <div class="s-eyebrow">Results</div>
+          <h2 class="s-title">등반 결과</h2>
+        </div>
+        <div class="results-layout">
+          <div class="donut-wrap">
+            <svg viewBox="0 0 100 100" class="donut-svg">
+              {donutSegs.map(s => (
+                <path d={s.path} fill="none" stroke={s.color} stroke-width="16" stroke-linecap="butt"/>
+              ))}
+              <text x="50" y="46" text-anchor="middle" class="dt-pct">{sendRate}</text>
+              <text x="50" y="58" text-anchor="middle" class="dt-lbl">% 완등</text>
+            </svg>
+            <div class="donut-legend">
+              {donutSegs.map(s => (
+                <div class="dleg">
+                  <span class="dleg-dot" style={`background:${s.color}`}></span>
+                  <span class="dleg-name">{s.label}</span>
+                  <span class="dleg-n mono">{s.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div class="rcards">
+            {[
+              { n: sends.length, l: '완등', s: 'OS · FL · RP · Send', cls: 'rc-send' },
+              { n: statusBuckets.get('projecting') ?? 0, l: '프로젝팅', s: '계속 작업 중', cls: 'rc-proj' },
+              { n: (statusBuckets.get('attempt')??0)+(statusBuckets.get('failed')??0), l: '미완등', s: 'Attempt + Failed', cls: 'rc-fail' },
+              { n: totalRoutes, l: '총 기록', s: `${logsWithRoutes.length}개 세션`, cls: 'rc-total' },
+            ].map(c => (
+              <div class={`rcard ${c.cls}`}>
+                <div class="rcard-n">{c.n}</div>
+                <div class="rcard-l">{c.l}</div>
+                <div class="rcard-s">{c.s}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ══════════════════════ GRADE PYRAMID ══ -->
+  {pyramidRows.length > 0 && (
+    <section class="section section-tinted">
+      <div class="section-inner">
+        <div class="section-hd">
+          <div class="s-eyebrow">Grade Pyramid</div>
+          <h2 class="s-title">그레이드 피라미드</h2>
+        </div>
+        {(pbOnsight || pbFlash || pbRedpoint) && (
+          <div class="pb-cards">
+            {pbOnsight && (
+              <div class="pb-card">
+                <div class="pb-grade mono">{pbOnsight}</div>
+                <div class="pb-label mono">Best Onsight</div>
+              </div>
+            )}
+            {pbFlash && (
+              <div class="pb-card">
+                <div class="pb-grade mono">{pbFlash}</div>
+                <div class="pb-label mono">Best Flash</div>
+              </div>
+            )}
+            {pbRedpoint && (
+              <div class="pb-card pb-card-rp">
+                <div class="pb-grade mono">{pbRedpoint}</div>
+                <div class="pb-label mono">Best Redpoint</div>
+              </div>
+            )}
+          </div>
+        )}
+        <div class="pyramid-chart">
+          {pyramidRows.map(row => (
+            <div class="pyr-row">
+              <div class="pyr-label mono">{row.label}</div>
+              <div class="pyr-bars">
+                <div class="pyr-track">
+                  {row.onsight > 0 && (
+                    <div class="pyr-seg pyr-os" style={`width:${(row.onsight/maxPyramidTotal)*100}%`} title={`온사이트 ${row.onsight}회`}></div>
+                  )}
+                  {row.flash > 0 && (
+                    <div class="pyr-seg pyr-fl" style={`width:${(row.flash/maxPyramidTotal)*100}%`} title={`플래시 ${row.flash}회`}></div>
+                  )}
+                  {row.redpoint > 0 && (
+                    <div class="pyr-seg pyr-rp" style={`width:${(row.redpoint/maxPyramidTotal)*100}%`} title={`레드포인트 ${row.redpoint}회`}></div>
+                  )}
+                  {row.send > 0 && (
+                    <div class="pyr-seg pyr-sd" style={`width:${(row.send/maxPyramidTotal)*100}%`} title={`완등 ${row.send}회`}></div>
+                  )}
+                </div>
+                <span class="pyr-total mono">{row.total}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div class="pyr-legend">
+          <span class="pyl pyl-os">■ 온사이트</span>
+          <span class="pyl pyl-fl">■ 플래시</span>
+          <span class="pyl pyl-rp">■ 레드포인트</span>
+          <span class="pyl pyl-sd">■ 완등(기타)</span>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ══════════════════════════ GRADE TIMELINE ══ -->
+  {hasGradeData ? (
+    <section class="section">
+      <div class="section-inner">
+        <div class="section-hd">
+          <div class="s-eyebrow">Grade Progression</div>
+          <h2 class="s-title">등급 진행 — 하드프리</h2>
+        </div>
+        <div class="grade-chart-wrap">
+          <svg viewBox={`0 0 ${chartW} ${chartH}`} class="grade-svg" preserveAspectRatio="xMidYMid meet">
+            {/* Y grid lines + labels */}
+            {yTicks.map(t => (
+              <>
+                <line x1={padL} y1={t.y} x2={padL + innerW} y2={t.y} class="gc-grid" />
+                <text x={padL - 6} y={t.y + 4} class="gc-label" text-anchor="end">{t.label}</text>
+              </>
+            ))}
+            {/* PR step line */}
+            {prLinePath && (
+              <path d={prLinePath} class="gc-pr-line" fill="none" />
+            )}
+            {/* Route dots — 선등(lead) / 톱로핑(TR) 색상 구별 */}
+            {routeDots.map(d => (
+              <a href={`/logs/${d.logSlug}/`}>
+                <circle
+                  cx={xScale(d.date).toFixed(1)}
+                  cy={yScale(d.gradeNum).toFixed(1)}
+                  r={d.isPR ? 5 : 3.5}
+                  class={d.isLead ? (d.isPR ? 'gc-dot gc-dot-lead-pr' : 'gc-dot gc-dot-lead') : (d.isPR ? 'gc-dot gc-dot-pr' : 'gc-dot gc-dot-tr')}
+                >
+                  <title>{d.date.toISOString().slice(0,10)} · {d.grade}{d.isLead ? ' (선등)' : ''}</title>
+                </circle>
+              </a>
+            ))}
+            {/* X axis */}
+            <line x1={padL} y1={padT + innerH} x2={padL + innerW} y2={padT + innerH} class="gc-axis" />
+          </svg>
+          <div class="grade-legend">
+            <span class="gl-pr">● PR</span>
+            <span class="gl-tr">● 기본(TR)</span>
+            <span class="gl-lead">● 선등</span>
+            {gradeTimeline.length > 0 && (
+              <span class="gl-current mono">PR: {gradeTimeline[gradeTimeline.length - 1].grade}</span>
+            )}
+          </div>
+        </div>
+        {gradeTimeline.length > 0 && (
+          <div class="pr-milestones">
+            {gradeTimeline.map(p => (
+              <a href={`/logs/${p.logSlug}/`} class="pr-item">
+                <span class="pr-grade mono">{p.grade}</span>
+                <span class="pr-date mono">{p.date.toISOString().slice(0,10)}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  ) : (
+    <section class="section">
+      <div class="section-inner">
+        <div class="section-hd">
+          <div class="s-eyebrow">Grade Progression</div>
+          <h2 class="s-title">등급 진행 — 하드프리</h2>
+        </div>
+        <p class="empty-note">로그의 <code>routes[]</code>에 등급(5.x)과 완등 결과를 채우면 그래프가 표시됩니다.</p>
+      </div>
+    </section>
+  )}
+
+  <!-- ══════════════════════════════ PROJECTS ══ -->
+  {activeProjects.length > 0 && (
+    <section class="section section-tinted">
+      <div class="section-inner">
+        <div class="section-hd">
+          <div class="s-eyebrow">On the Wall</div>
+          <h2 class="s-title">진행 중인 프로젝트</h2>
+        </div>
+        <div class="proj-list">
+          {activeProjects.map(p => (
+            <a href={`/logs/${p.logSlug}/`} class="proj-row">
+              <div class="proj-left">
+                <div class="proj-name">{p.name}</div>
+                {p.crag && <div class="proj-crag">{p.crag}</div>}
+              </div>
+              <div class="proj-right">
+                {p.grade && <span class="proj-grade mono">{p.grade}</span>}
+                {p.attempts && <span class="proj-att mono">{p.attempts} tries</span>}
+                <span class="proj-badge">PROJ</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ══════════════════════════ GYM / INDOOR ══ -->
+  {gymLogs.length > 0 && (
+    <section class="section">
+      <div class="section-inner">
+        <div class="section-hd">
+          <div class="s-eyebrow">Indoor Training</div>
+          <h2 class="s-title">인공암장 훈련</h2>
+        </div>
+        <div class="gym-stats">
+          <div class="gym-nums">
+            {[
+              { n: gymLogs.length, l: '세션', s: '실내 훈련 횟수' },
+              { n: gymStyleCount['볼더링'], l: '볼더링', s: '문제 시도' },
+              { n: gymStyleCount['지구력'], l: '지구력', s: '서킷 트레이닝' },
+              { n: gymStyleCount['리드'], l: '실내 리드', s: '볼트 루트' },
+            ].filter(c => c.n > 0).map(c => (
+              <div class="gym-num">
+                <div class="gym-n mono">{c.n}</div>
+                <div class="gym-l">{c.l}</div>
+                <div class="gym-s mono">{c.s}</div>
+              </div>
+            ))}
+          </div>
+          {topGymCrags.length > 0 && (
+            <div class="gym-crags">
+              <div class="gym-crags-hd mono">암장별 방문</div>
+              {topGymCrags.map(([slug, count]) => (
+                <div class="gcbar">
+                  <div class="gcbar-hd">
+                    <span class="gcbar-name">{getCragTitle(slug)}</span>
+                    <span class="gcbar-n mono">{count}회</span>
+                  </div>
+                  <div class="gcbar-track">
+                    <div class="gcbar-fill" style={`width:${(count / maxGymCount) * 100}%`}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ══════════════════════════════ COVERAGE ══ -->
+  <div class="coverage">
+    <div class="section-inner">
+      <div class="cov-label mono">데이터 커버리지</div>
+      <div class="cov-items">
+        <div class="cov-item">
+          <span class="cov-n mono">{climbLogs.length}</span>
+          <span class="cov-l">세션</span>
+        </div>
+        <div class="cov-item">
+          <span class="cov-n mono">{logsWithRoutes.length}<small>/{climbLogs.length}</small></span>
+          <span class="cov-l">루트 구조화</span>
+        </div>
+        <div class="cov-item">
+          <span class="cov-n mono">{climbLogs.filter(l=>!!l.data.crag).length}<small>/{climbLogs.length}</small></span>
+          <span class="cov-l">crag 연결</span>
+        </div>
+      </div>
+      <p class="cov-hint"><code>routes[]</code>에 등급·결과를 채울수록 그래프가 풍부해집니다.</p>
+    </div>
+  </div>
+
+</div>
+<style>
+  .stats-root { padding-bottom: 0; }
+
+  /* ── DATA COMPLETENESS BAR ── */
+  .completeness-bar {
+    border-bottom: 1px solid var(--rule-strong);
+    background: color-mix(in srgb, var(--ochre) 4%, var(--paper));
+    padding: 0.85rem 2rem;
+  }
+  .cb-inner {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+  }
+  .cb-left { display: flex; align-items: center; gap: 0.6rem; }
+  .cb-label { font-size: 0.6rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--stone-500); white-space: nowrap; }
+  .cb-track {
+    width: 100px; height: 4px;
+    background: var(--rule-strong);
+    border-radius: 2px; overflow: hidden;
+  }
+  .cb-fill { height: 100%; background: var(--ochre); border-radius: 2px; }
+  .cb-pct { font-size: 0.7rem; font-weight: 600; color: var(--ochre); }
+  .cb-sub { font-size: 0.62rem; color: var(--stone-500); }
+  .cb-detail { flex: 1; }
+  .cb-summary {
+    font-size: 0.65rem; letter-spacing: 0.08em; color: var(--stone-500);
+    cursor: pointer; list-style: none; user-select: none;
+  }
+  .cb-summary::-webkit-details-marker { display: none; }
+  .cb-list {
+    display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem;
+  }
+  .cb-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.62rem; padding: 0.2em 0.6em;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper-card);
+    color: var(--stone-700); text-decoration: none;
+    transition: border-color 0.1s;
+  }
+  .cb-item:hover { border-color: var(--ochre); color: var(--ink); }
+  .cb-item-date { color: var(--stone-500); }
+  .cb-item-crag { font-family: 'Spoqa Han Sans Neo', sans-serif; }
+
+  /* ── HERO ── */
+  .hero {
+    background: var(--void);
+    color: var(--ink);
+    padding: 5rem 2rem 4.5rem;
+  }
+  .hero-head {
+    max-width: 1200px;
+    margin: 0 auto 3.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .hero-eyebrow {
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.35;
+  }
+  .hero-period { font-size: 0.68rem; letter-spacing: 0.12em; opacity: 0.3; }
+  .hero-numbers {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 0;
+    flex-wrap: wrap;
+  }
+  .hnum {
+    flex: 1;
+    min-width: 100px;
+    padding-right: 2rem;
+  }
+  .hdiv {
+    width: 1px;
+    height: 5rem;
+    background: rgba(255,255,255,0.1);
+    margin-right: 2rem;
+    flex-shrink: 0;
+    align-self: flex-end;
+    margin-bottom: 0.6rem;
+  }
+  .hnum-n {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: clamp(3.5rem, 7vw, 6.5rem);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.06em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .hnum-l {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 300;
+    
+    color: var(--stone-700);
+    margin-top: 0.55rem;
+    letter-spacing: 0.02em;
+  }
+  .hnum-s {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    color: var(--stone-500);
+    margin-top: 0.25rem;
+  }
+
+  /* ── SECTION SCAFFOLD ── */
+  .section {
+    padding: 5rem 2rem;
+    border-top: 1px solid var(--rule);
+  }
+  .section-tinted { background: var(--paper-soft); }
+  .section-inner { max-width: 1200px; margin: 0 auto; }
+  .section-hd { margin-bottom: 2.5rem; }
+  .s-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-bottom: 0.5rem;
+  }
+  .s-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 1px;
+    background: var(--ochre);
+  }
+  .s-title {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 400;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .empty-note { color: var(--stone-500); font-size: 0.85rem;  margin-top: 1.5rem; }
+
+  /* ── ACTIVITY CHART ── */
+  .chart-wrap {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .chart-yaxis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding-bottom: 1.8rem;
+    padding-top: 0;
+  }
+  .yval {
+    font-size: 0.55rem;
+    color: var(--stone-500);
+    text-align: right;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+  .chart-area {
+    position: relative;
+    height: 300px;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  .chart-grid-lines {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+  .gline {
+    width: 100%;
+    height: 1px;
+    background: var(--rule);
+  }
+  .month-bars {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    padding-bottom: 1.8rem;
+  }
+  .mcol {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+  .yr-mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 0.5rem;
+    color: var(--ochre);
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    height: 2rem;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+  .mbar-wrap {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    position: relative;
+  }
+  .mbar {
+    width: 100%;
+    background: var(--ochre);
+    opacity: 0.65;
+    border-radius: 1px 1px 0 0;
+    min-height: 2px;
+    transition: opacity 0.12s;
+    position: relative;
+  }
+  .mbar-empty { background: var(--stone-200); opacity: 0.35; }
+  .mbar-tip {
+    position: absolute;
+    top: -1.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.5rem;
+    color: var(--ochre);
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .mcol:hover .mbar { opacity: 1; }
+  .mcol:hover .mbar-tip { opacity: 1; }
+  .mlabel {
+    position: absolute;
+    bottom: -1.5rem;
+    font-size: 0.5rem;
+    color: var(--stone-500);
+    white-space: nowrap;
+    letter-spacing: 0;
+  }
+
+  /* ── TWO COL ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; }
+  .col-panel {}
+
+  /* ── CRAG BARS ── */
+  .crag-bars { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1.5rem; }
+  .cbar {}
+  .cbar-hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.3rem; }
+  .cbar-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: none;
+    color: var(--ink);
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+  }
+  .cbar-name:hover { color: var(--ochre); }
+  .cbar-ct { font-size: 0.68rem; color: var(--stone-500); letter-spacing: 0.04em; }
+  .cbar-track { height: 3px; background: var(--stone-200); border-radius: 2px; overflow: hidden; }
+  .cbar-fill { height: 100%; background: var(--ochre); opacity: 0.6; transition: opacity 0.12s; }
+  .cbar:hover .cbar-fill { opacity: 1; }
+
+  /* ── PARTNER CHIPS ── */
+  .pchips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 1.5rem; }
+  .pchip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.3em 0.7em;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper-card);
+    opacity: calc(0.4 + var(--freq) * 0.6);
+    cursor: default;
+    transition: opacity 0.12s, border-color 0.12s;
+  }
+  .pchip:hover { opacity: 1 !important; border-color: var(--ochre); }
+  .pchip-n { font-size: 0.85rem; font-weight: 500; color: var(--ink); }
+  .pchip-c { font-size: 0.62rem; color: var(--stone-500); }
+
+  /* ── RESULTS ── */
+  .results-layout { display: grid; grid-template-columns: 200px 1fr; gap: 4rem; align-items: start; }
+  .donut-wrap { display: flex; flex-direction: column; align-items: center; }
+  .donut-svg { width: 160px; height: 160px; }
+  .dt-pct {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    fill: var(--ink);
+    letter-spacing: -0.04em;
+  }
+  .dt-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6.5px;
+    fill: var(--stone-500);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .donut-legend { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 1.5rem; width: 100%; }
+  .dleg { display: flex; align-items: center; gap: 0.6em; font-size: 0.82rem; }
+  .dleg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dleg-name { flex: 1; color: var(--stone-700); }
+  .dleg-n { font-size: 0.8rem; color: var(--ink); font-weight: 500; }
+
+  .rcards { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+  .rcard { background: var(--paper-card); padding: 2rem 1.5rem; }
+  .rcard-n {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: clamp(2.2rem, 4vw, 3.5rem);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.05em;
+    font-variant-numeric: tabular-nums;
+  }
+  .rc-send   .rcard-n { color: var(--moss); }
+  .rc-proj   .rcard-n { color: var(--ochre); }
+  .rc-fail   .rcard-n { color: var(--stone-500); }
+  .rc-total  .rcard-n { color: var(--ink); }
+  .rcard-l {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    margin-top: 0.7rem;
+  }
+  .rcard-s { font-size: 0.78rem; color: var(--stone-500); margin-top: 0.25rem; }
+
+  /* ── GRADE TIMELINE ── */
+  .grade-chart-wrap { position: relative; }
+  .grade-svg {
+    width: 100%;
+    max-height: 260px;
+    display: block;
+    overflow: visible;
+  }
+  .gc-grid { stroke: var(--rule); stroke-width: 1; }
+  .gc-axis { stroke: var(--rule-strong); stroke-width: 1.5; }
+  .gc-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    fill: var(--stone-500);
+    letter-spacing: 0;
+  }
+  .gc-pr-line {
+    stroke: var(--ochre);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+    opacity: 0.5;
+  }
+  .gc-dot {
+    stroke-width: 1;
+    transition: fill 0.12s, opacity 0.12s;
+    cursor: pointer;
+  }
+  /* 기본(TR): 녹색/ochre 계열 */
+  .gc-dot-tr {
+    fill: rgba(0, 232, 122, 0.15);
+    stroke: var(--ochre);
+    opacity: 0.7;
+  }
+  /* 기본 PR: 녹색 채움 */
+  .gc-dot-pr {
+    fill: var(--ochre);
+    stroke: var(--ochre);
+    opacity: 0.9;
+  }
+  /* 선등: 파란색 */
+  .gc-dot-lead {
+    fill: rgba(74, 158, 255, 0.25);
+    stroke: #4a9eff;
+    opacity: 0.85;
+  }
+  /* 선등 PR: 파란색 채움 */
+  .gc-dot-lead-pr {
+    fill: #4a9eff;
+    stroke: #4a9eff;
+    opacity: 0.95;
+  }
+  .gc-dot-tr:hover, .gc-dot-pr:hover { fill: var(--ochre); opacity: 1; }
+  .gc-dot-lead:hover, .gc-dot-lead-pr:hover { fill: #4a9eff; opacity: 1; }
+  .grade-legend {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 0.8rem;
+    font-size: 0.72rem;
+    color: var(--stone-500);
+  }
+  .gl-pr { color: var(--ochre); }
+  .gl-tr { color: color-mix(in srgb, var(--ochre) 55%, var(--stone-500)); }
+  .gl-lead { color: #4a9eff; }
+  .gl-current {
+    margin-left: auto;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    color: var(--ochre);
+    font-weight: 600;
+  }
+  .pr-milestones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    background: var(--rule-strong);
+    border: 1px solid var(--rule-strong);
+    margin-top: 2rem;
+  }
+  .pr-item {
+    background: var(--paper-card);
+    padding: 0.9rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    color: var(--ink);
+    border: none;
+    min-width: 100px;
+    transition: background 0.12s;
+  }
+  .pr-item:hover { background: color-mix(in srgb, var(--ochre) 6%, var(--paper-card)); color: var(--ink); border-bottom: none; }
+  .pr-grade { font-size: 1rem; font-weight: 600; color: var(--ochre); letter-spacing: -0.02em; }
+  .pr-date { font-size: 0.6rem; color: var(--stone-500); letter-spacing: 0.04em; margin-top: 0.1rem; }
+
+  /* ── PROJECTS ── */
+  .proj-list { margin-top: 0.5rem; }
+  .proj-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.1rem 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+    border-left: none;
+    transition: background 0.12s;
+    gap: 1rem;
+  }
+  .proj-list .proj-row:first-child { border-top: 1px solid var(--rule); }
+  .proj-row:hover { background: color-mix(in srgb, var(--ochre) 4%, transparent); color: var(--ink); border-bottom-color: var(--rule); }
+  .proj-name { font-family: 'Spoqa Han Sans Neo', sans-serif; font-size: 1.05rem; }
+  .proj-crag { font-size: 0.78rem; color: var(--stone-500); margin-top: 0.15rem; }
+  .proj-right { display: flex; align-items: center; gap: 0.8rem; flex-shrink: 0; }
+  .proj-grade { font-size: 0.82rem; color: var(--ochre); font-weight: 500; }
+  .proj-att { font-size: 0.72rem; color: var(--stone-500); }
+  .proj-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    color: var(--ochre);
+    border: 1px solid color-mix(in srgb, var(--ochre) 35%, transparent);
+    padding: 0.2em 0.5em;
+  }
+
+  /* ── COVERAGE ── */
+  .coverage {
+    background: var(--void);
+    padding: 2.5rem 2rem;
+  }
+  .cov-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    margin-bottom: 1.5rem;
+  }
+  .cov-items { display: flex; gap: 3rem; flex-wrap: wrap; }
+  .cov-item { display: flex; flex-direction: column; gap: 0.25rem; }
+  .cov-n { font-size: 1.3rem; font-weight: 500; color: var(--stone-700); letter-spacing: -0.02em; }
+  .cov-n small { font-size: 0.65em; color: var(--stone-500); }
+  .cov-l { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--stone-500); }
+  .cov-hint { margin-top: 1.5rem; font-size: 0.78rem; color: var(--stone-500); }
+  .cov-hint code { font-family: 'JetBrains Mono', monospace; color: var(--stone-700); }
+
+  /* ── GYM STATS ── */
+  .gym-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; }
+  .gym-nums { display: flex; gap: 2.5rem; flex-wrap: wrap; align-content: flex-start; }
+  .gym-num { display: flex; flex-direction: column; gap: 0.2rem; min-width: 80px; }
+  .gym-n { font-size: 2rem; font-weight: 500; letter-spacing: -0.04em; color: var(--ink); line-height: 1; }
+  .gym-l { font-size: 0.78rem; color: var(--ink); margin-top: 0.2rem; }
+  .gym-s { font-size: 0.6rem; color: var(--stone-500); letter-spacing: 0.06em; }
+  .gym-crags { display: flex; flex-direction: column; gap: 0.7rem; }
+  .gym-crags-hd { font-size: 0.58rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--stone-500); margin-bottom: 0.6rem; }
+  .gcbar {}
+  .gcbar-hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.3rem; }
+  .gcbar-name { font-size: 0.9rem; font-weight: 500; }
+  .gcbar-n { font-size: 0.7rem; color: var(--stone-500); }
+  .gcbar-track { height: 3px; background: var(--rule-strong); border-radius: 2px; overflow: hidden; }
+  .gcbar-fill { height: 100%; background: #4a9eff; opacity: 0.7; border-radius: 2px; }
+
+  /* ── GRADE PYRAMID ── */
+  .pb-cards {
+    display: flex; gap: 1px; margin-bottom: 2rem;
+    background: var(--rule-strong); border: 1px solid var(--rule-strong);
+    flex-wrap: wrap;
+  }
+  .pb-card {
+    flex: 1; min-width: 110px;
+    padding: 1.5rem;
+    background: var(--paper-card);
+    text-align: center;
+  }
+  .pb-card-rp { position: relative; }
+  .pb-card-rp::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+    height: 2px; background: var(--ochre);
+  }
+  .pb-grade {
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: 600; letter-spacing: -0.04em;
+    color: var(--stone-700); line-height: 1;
+  }
+  .pb-card-rp .pb-grade { color: var(--ochre); }
+  .pb-label { font-size: 0.58rem; color: var(--stone-500); margin-top: 0.5rem; letter-spacing: 0.18em; text-transform: uppercase; }
+
+  .pyramid-chart { display: flex; flex-direction: column; gap: 4px; margin-bottom: 1rem; }
+  .pyr-row { display: flex; align-items: center; gap: 0.75rem; }
+  .pyr-label { min-width: 44px; text-align: right; font-size: 0.62rem; color: var(--stone-500); flex-shrink: 0; }
+  .pyr-bars { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0; }
+  .pyr-track {
+    flex: 1; height: 20px;
+    background: var(--paper);
+    display: flex; overflow: hidden;
+    border: 1px solid var(--rule-strong);
+    min-width: 0;
+  }
+  .pyr-seg { height: 100%; transition: opacity 0.12s; cursor: default; }
+  .pyr-seg:hover { opacity: 0.75; }
+  .pyr-os { background: #ffd55a; }
+  .pyr-fl { background: var(--ochre); }
+  .pyr-rp { background: rgba(0,232,122,0.42); }
+  .pyr-sd { background: rgba(0,232,122,0.14); border-right: 1px solid var(--rule-strong); }
+  .pyr-total { font-size: 0.62rem; color: var(--stone-500); min-width: 18px; text-align: right; flex-shrink: 0; }
+
+  .pyr-legend { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.65rem; margin-top: 0.75rem; }
+  .pyl { font-family: 'JetBrains Mono', monospace; }
+  .pyl-os { color: #ffd55a; }
+  .pyl-fl { color: var(--ochre); }
+  .pyl-rp { color: rgba(0,232,122,0.65); }
+  .pyl-sd { color: var(--stone-500); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .two-col { grid-template-columns: 1fr; gap: 3rem; }
+    .results-layout { grid-template-columns: 1fr; }
+    .donut-wrap { flex-direction: row; gap: 2rem; align-items: flex-start; }
+    .donut-svg { width: 120px; height: 120px; }
+    .rcards { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .hero { padding: 3.5rem 1.25rem 3rem; }
+    .hero-numbers { flex-direction: column; }
+    .hdiv { width: 50px; height: 1px; margin: 0.75rem 0; align-self: flex-start; }
+    .hnum { padding: 0; }
+    .section { padding: 3rem 1.25rem; }
+    .chart-wrap { grid-template-columns: 24px 1fr; }
+    .rcards { grid-template-columns: 1fr; }
+    .donut-wrap { flex-direction: column; align-items: center; }
+  }
+  @media (max-width: 374px) {
+    .hero { padding: 2.5rem 1rem 2rem; }
+    .section { padding: 2.5rem 1rem; }
+  }
+</style>
+</BaseLayout>

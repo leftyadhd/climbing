@@ -24,6 +24,7 @@ collections:
         default: "log"
         required: false
       - { label: "암장", name: "crag", widget: "string", required: false, hint: "crags slug (예: 북한산-인수봉)" }
+      - { label: "구역/섹터", name: "sector", widget: "string", required: false, hint: "예: 무당골, 관운봉 슬랩" }
       - { label: "동행 (그룹)", name: "crew", widget: "list", required: false, hint: "예: 연우지암" }
       - { label: "파트너 (로프)", name: "partners", widget: "list", required: false }
       - { label: "날씨", name: "weather", widget: "string", required: false }
@@ -40,21 +41,44 @@ collections:
         name: "routes"
         widget: "list"
         required: false
+        summary: "{{fields.name}} {{fields.grade}} — {{fields.status}}"
         fields:
-          - { label: "루트명", name: "name", widget: "string" }
-          - { label: "등급", name: "grade", widget: "string", required: false }
+          - label: "상태 ★"
+            name: "status"
+            widget: "select"
+            options:
+              - { label: "OS (온사이트)", value: "onsight" }
+              - { label: "FL (플래시)", value: "flash" }
+              - { label: "RP (레드포인트)", value: "redpoint" }
+              - { label: "Send (완등)", value: "send" }
+              - { label: "프로젝트 중", value: "projecting" }
+              - { label: "시도", value: "attempt" }
+              - { label: "실패", value: "failed" }
+          - { label: "루트명 ★", name: "name", widget: "string", required: false, hint: "이름 모르면 route_ref만 입력" }
+          - { label: "등급 ★", name: "grade", widget: "string", required: false, hint: "예: 5.11a, 5.10c" }
           - label: "스타일"
             name: "style"
             widget: "select"
             required: false
-            options: ["sport", "trad", "boulder", "top-rope", "multi-pitch"]
-          - label: "상태"
-            name: "status"
+            options:
+              - { label: "스포트/리드", value: "sport" }
+              - { label: "트래드", value: "trad" }
+              - { label: "볼더링", value: "boulder" }
+              - { label: "탑로프", value: "top-rope" }
+              - { label: "멀티피치", value: "multi-pitch" }
+              - { label: "지구력", value: "endurance" }
+          - { label: "crag 루트 연결 (route_ref)", name: "route_ref", widget: "string", required: false, hint: "crag 파일의 route id (예: 가위바위보). 입력 시 암장 루트와 자동 연결" }
+          - label: "체감 난이도"
+            name: "grade_feel"
             widget: "select"
-            options: ["onsight", "flash", "redpoint", "send", "projecting", "attempt", "failed"]
+            required: false
+            options:
+              - { label: "Soft (쉬운 편)", value: "soft" }
+              - { label: "On (딱 맞음)", value: "on" }
+              - { label: "Hard (어려운 편)", value: "hard" }
           - { label: "시도 횟수", name: "attempts", widget: "number", required: false }
-          - { label: "사용한 기술", name: "techniques_used", widget: "list", required: false, hint: "위키 technique slug" }
           - { label: "메모", name: "notes", widget: "text", required: false }
+          - { label: "사용한 기술", name: "techniques_used", widget: "list", required: false, hint: "위키 technique slug" }
       - { label: "본문", name: "body", widget: "markdown" }
 
   # 암장 (독립 컬렉션)
@@ -85,6 +109,14 @@ collections:
         name: "season_best"
         widget: "list"
         required: false
+      - label: "섹터 목록"
+        name: "sectors"
+        widget: "list"
+        required: false
+        fields:
+          - { label: "ID (slug)", name: "id", widget: "string", hint: "영문/한글 slug. route의 sector 필드와 일치해야 함 (예: 숨은암장)" }
+          - { label: "이름 (표시용)", name: "name", widget: "string", hint: "UI에 표시될 이름 (예: 숨은암장 (한우리암장))" }
+          - { label: "설명", name: "description", widget: "string", required: false }
       - label: "태그"
         name: "tags"
         widget: "list"
