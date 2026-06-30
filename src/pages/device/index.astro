@@ -112,12 +112,12 @@ const conditionClass: Record<string, string> = {
 
 <style>
   h1 {
-    font-family: 'Fraunces', 'Hahmlet', serif;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
     font-weight: 400;
     line-height: 1.05;
     margin-bottom: 1rem;
   }
-  h1 em { font-style: italic; color: var(--ochre); }
+  h1 em {  color: var(--ochre); }
   .intro { font-size: 1.05rem; color: var(--stone-700); margin-bottom: 2rem; }
 
   .summary-strip {
@@ -127,7 +127,7 @@ const conditionClass: Record<string, string> = {
   }
   .sum-item { display: flex; flex-direction: column; }
   .sum-n {
-    font-family: 'Fraunces', serif;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
     font-size: 2.2rem;
     font-weight: 500;
     line-height: 1;
@@ -175,7 +175,7 @@ const conditionClass: Record<string, string> = {
 
   .device-main { display: flex; align-items: baseline; gap: 0.8rem; min-width: 0; }
   .device-title {
-    font-family: 'Hahmlet', 'Fraunces', serif;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
     font-size: 1.1rem;
     font-weight: 400;
     flex-shrink: 0;
@@ -214,8 +214,11 @@ const conditionClass: Record<string, string> = {
   .retired-section { opacity: 0.7; }
 
   @media (max-width: 640px) {
-    .device-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    .device-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; min-height: 48px; }
     .device-meta { flex-wrap: wrap; }
+  }
+  @media (max-width: 374px) {
+    .container { padding-left: 1rem; padding-right: 1rem; }
   }
 </style>
 </BaseLayout>

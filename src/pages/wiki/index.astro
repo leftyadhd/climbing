@@ -5,9 +5,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 const all = await getCollection('wiki');
 const techniques = all.filter(e => e.data.type === 'technique');
 const grouped = {
-  guide: all.filter(e => e.data.type === 'guide'),
+  guide: all.filter(e => e.data.type === 'guide' && !e.slug.includes('neil-gresham-masterclass')),
   gear:  all.filter(e => e.data.type === 'gear'),
 };
+
+const neilGreshamP1 = all
+  .filter(e => /neil-gresham-masterclass\/p1-/.test(e.slug))
+  .sort((a, b) => a.slug.localeCompare(b.slug));
+const neilGreshamP2 = all
+  .filter(e => /neil-gresham-masterclass\/p2-/.test(e.slug))
+  .sort((a, b) => a.slug.localeCompare(b.slug));
 
 const diffLabel: Record<string, string> = {
   beginner: '입문',
@@ -61,6 +68,17 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
     루트를 가기 전에 한 번, 다녀와서 다시 한 번.<br/>
     직접 쓰고 고치며 지식이 깊어집니다.
   </p>
+
+  <!-- 검색 -->
+  <div class="search-wrap">
+    <div class="search-input-row">
+      <svg class="search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="6.5" cy="6.5" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+      </svg>
+      <input type="search" id="wiki-search-input" placeholder="기술, 장비, 개념 검색…" class="search-input" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="search-results" id="wiki-search-results" hidden></div>
+  </div>
 
   <!-- 입문자 경로 -->
   {beginnerPath.length > 0 && (
@@ -159,7 +177,7 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
     )}
   </section>
 
-  <!-- II·III·IV 섹션 -->
+  <!-- II·III 섹션 -->
   {supportSections.map(({ key, label, roman, desc }) => {
     const items = grouped[key];
     if (items.length === 0) return null;
@@ -199,16 +217,76 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
     );
   })}
 
+  <!-- IV. Neil Gresham Masterclass -->
+  {(neilGreshamP1.length > 0 || neilGreshamP2.length > 0) && (
+    <section class="wiki-section">
+      <div class="section-head">
+        <span class="roman">IV</span>
+        <div class="section-info">
+          <h2>Neil Gresham Masterclass</h2>
+          <p class="section-desc">테크닉·훈련·전술 영상 강의 시리즈.</p>
+        </div>
+        <span class="section-count">{String(neilGreshamP1.length + neilGreshamP2.length).padStart(2, '0')}</span>
+      </div>
+      <div class="tech-grid">
+        {neilGreshamP1.length > 0 && (
+          <div class="tech-cat">
+            <div class="tech-cat-head">
+              <span class="tech-cat-label">Part 1 — Technique & Training</span>
+              <span class="tech-cat-desc">{neilGreshamP1.length}개 영상</span>
+            </div>
+            <ul class="wiki-list">
+              {neilGreshamP1.map(item => (
+                <li>
+                  <a href={`/wiki/${item.slug}/`} class="wiki-row">
+                    <div class="wiki-row-main">
+                      <span class="wiki-title">{item.data.title}</span>
+                      {item.data.summary && (
+                        <span class="wiki-summary">{item.data.summary}</span>
+                      )}
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {neilGreshamP2.length > 0 && (
+          <div class="tech-cat">
+            <div class="tech-cat-head">
+              <span class="tech-cat-label">Part 2 — Skills & Tactics</span>
+              <span class="tech-cat-desc">{neilGreshamP2.length}개 영상</span>
+            </div>
+            <ul class="wiki-list">
+              {neilGreshamP2.map(item => (
+                <li>
+                  <a href={`/wiki/${item.slug}/`} class="wiki-row">
+                    <div class="wiki-row-main">
+                      <span class="wiki-title">{item.data.title}</span>
+                      {item.data.summary && (
+                        <span class="wiki-summary">{item.data.summary}</span>
+                      )}
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
+  )}
+
 </div>
 
 <style>
   h1 {
-    font-family: 'Fraunces', 'Hahmlet', serif;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
     font-weight: 400;
     line-height: 1.05;
     margin-bottom: 1rem;
   }
-  h1 em { font-style: italic; color: var(--ochre); }
+  h1 em {  color: var(--ochre); }
   .intro {
     font-size: 1.05rem;
     color: var(--stone-700);
@@ -337,8 +415,8 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
     margin-bottom: 0;
   }
   .roman {
-    font-family: 'Fraunces', serif;
-    font-style: italic;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    
     font-size: 1.1rem;
     color: var(--ochre);
   }
@@ -377,7 +455,7 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
   }
   .wiki-row-main { min-width: 0; }
   .wiki-title {
-    font-family: 'Hahmlet', 'Fraunces', serif;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
     font-size: 1.15rem;
     font-weight: 400;
     display: block;
@@ -435,6 +513,94 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
   }
   .add-hint:hover { color: var(--ochre); border-bottom-color: var(--ochre); }
 
+  /* ── SEARCH ── */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 2.5rem;
+  }
+  .search-input-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper-soft);
+    padding: 0.75rem 1rem;
+    transition: border-color 0.15s;
+  }
+  .search-wrap:focus-within .search-input-row {
+    border-color: var(--ochre);
+  }
+  .search-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--stone-500);
+    flex-shrink: 0;
+  }
+  .search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1rem;
+    color: var(--ink);
+  }
+  .search-input::placeholder { color: var(--stone-500); }
+  .search-input::-webkit-search-cancel-button { cursor: pointer; }
+  .search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--paper-card);
+    border: 1px solid var(--rule-strong);
+    border-top: none;
+    z-index: 100;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+  .sr-item {
+    display: block;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+    border-left: none;
+    transition: background 0.1s;
+  }
+  .sr-item:hover {
+    background: color-mix(in srgb, var(--ochre) 6%, var(--paper-card));
+    color: var(--ink);
+    border-bottom-color: var(--rule);
+  }
+  .sr-item:last-child { border-bottom: none; }
+  .sr-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.2rem;
+  }
+  .sr-excerpt {
+    font-size: 0.78rem;
+    color: var(--stone-500);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .sr-excerpt mark {
+    background: color-mix(in srgb, var(--ochre) 25%, transparent);
+    color: var(--ochre);
+    border-radius: 1px;
+    padding: 0 1px;
+  }
+  .sr-empty {
+    padding: 1.2rem 1rem;
+    font-size: 0.85rem;
+    color: var(--stone-500);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+
   @media (max-width: 640px) {
     .path-section { padding: 1.2rem; }
     .path-steps { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
@@ -444,4 +610,51 @@ const supportSections: { key: SectionKey; label: string; roman: string; desc: st
     .section-count { display: none; }
   }
 </style>
+
+<script>
+(async () => {
+  const input = document.getElementById('wiki-search-input') as HTMLInputElement | null;
+  const box   = document.getElementById('wiki-search-results') as HTMLDivElement | null;
+  if (!input || !box) return;
+
+  let pf: any;
+  try {
+    pf = await import(/* @vite-ignore */ '/pagefind/pagefind.js');
+    await pf.init();
+  } catch {
+    input.placeholder = '검색 (빌드 후 사용 가능)';
+    input.disabled = true;
+    return;
+  }
+
+  let timer: ReturnType<typeof setTimeout>;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { box.hidden = true; box.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const res = await pf.search(q, { filters: { section: 'wiki' } });
+      const data = await Promise.all(res.results.slice(0, 8).map((r: any) => r.data()));
+      if (data.length === 0) {
+        box.hidden = false;
+        box.innerHTML = '<div class="sr-empty">검색 결과 없음</div>';
+        return;
+      }
+      box.hidden = false;
+      box.innerHTML = data.map((d: any) => `
+        <a href="${d.url}" class="sr-item">
+          <div class="sr-title">${d.meta?.title ?? d.url}</div>
+          ${d.excerpt ? `<div class="sr-excerpt">${d.excerpt}</div>` : ''}
+        </a>`).join('');
+    }, 150);
+  });
+
+  document.addEventListener('click', (e) => {
+    const wrap = document.querySelector('.search-wrap');
+    if (wrap && !wrap.contains(e.target as Node)) {
+      box.hidden = true;
+    }
+  });
+})();
+</script>
 </BaseLayout>

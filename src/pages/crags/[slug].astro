@@ -5,7 +5,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 export async function getStaticPaths() {
   const crags = await getCollection('crags');
   return crags.map(crag => ({
-    params: { slug: crag.slug },
+    params: { slug: crag.slug ?? crag.id.replace(/\.md$/, '').split('/').pop()! },
     props: { crag },
   }));
 }
@@ -14,275 +14,623 @@ const { crag } = Astro.props;
 const { Content } = await crag.render();
 
 const routes = crag.data.routes;
-const sectorNames: string[] = routes.length
-  ? [...new Set(routes.map(r => r.sector ?? '전체'))].sort()
-  : [];
 type CragRoute = typeof routes[number];
-const routesBySector: Record<string, CragRoute[]> = {};
+
+// Sector ordering: sectors[] is now {id, name}[] — match by id
+const topSectors = crag.data.sectors ?? [];  // {id, name}[]
+const topSectorIds = topSectors.map(s => s.id);
+const routeSectorIds = [...new Set(routes.map(r => r.sector).filter((s): s is string => !!s))];
+const hasSectorDef = topSectors.length > 0;
+// Ordered list of sector ids: defined first, then any extras found in routes
+const orderedSectorIds: string[] = hasSectorDef
+  ? [...topSectorIds, ...routeSectorIds.filter(s => !topSectorIds.includes(s))]
+  : routeSectorIds.sort();
+const UNSECTORED = hasSectorDef ? '기타' : '전체';
+const byS: Record<string, CragRoute[]> = {};
 for (const r of routes) {
-  const s = r.sector ?? '전체';
-  if (!routesBySector[s]) routesBySector[s] = [];
-  routesBySector[s].push(r);
+  const s = r.sector ?? UNSECTORED;
+  if (!byS[s]) byS[s] = [];
+  byS[s].push(r);
 }
+if (byS[UNSECTORED]) orderedSectorIds.push(UNSECTORED);
+const sectorIds = orderedSectorIds.length > 0 ? orderedSectorIds : routes.length ? ['전체'] : [];
+if (!byS['전체'] && sectorIds.includes('전체') && !hasSectorDef) byS['전체'] = routes;
+// Helper: id → display name
+const sectorLabel = (id: string) => topSectors.find(s => s.id === id)?.name ?? id;
 
 const allLogs = await getCollection('logs');
+const myKey = (crag.slug ?? crag.id.replace(/\.md$/,'').split('/').pop()!).normalize('NFC');
 const relatedLogs = allLogs
-  .filter(l => l.data.crag === crag.slug)
+  .filter(l => l.data.crag && l.data.crag.normalize('NFC') === myKey)
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+// route_ref 역방향 맵: route id → 해당 루트를 기록한 로그들
+const routeLogMap = new Map<string, typeof relatedLogs>();
+for (const log of relatedLogs) {
+  for (const lr of log.data.routes) {
+    if (lr.route_ref) {
+      if (!routeLogMap.has(lr.route_ref)) routeLogMap.set(lr.route_ref, []);
+      routeLogMap.get(lr.route_ref)!.push(log);
+    }
+  }
+}
+
+function gradeColor(g: string | null | undefined): string {
+  if (!g) return 'transparent';
+  if (/5\.[67]/.test(g)) return '#2a7a38';
+  if (/5\.[89]/.test(g)) return '#1e6830';
+  if (/5\.10[ab]/i.test(g)) return '#6a8818';
+  if (/5\.10[cd]/i.test(g)) return '#a07010';
+  if (/5\.11/i.test(g)) return '#b83408';
+  if (/5\.1[234]/i.test(g)) return '#8a0808';
+  return 'transparent';
+}
+const gColor = (g: string|null|undefined) => gradeColor(g);
+const gText  = (g: string|null|undefined) => gradeColor(g) === 'transparent' ? 'var(--stone-700)' : '#fff';
 ---
 <BaseLayout title={crag.data.title} description={crag.data.summary}>
-<article>
-<div class="container">
+<article class="crag-detail">
 
-  <div class="doc-meta">
-    <a href="/crags/">← Crags</a>
-    {crag.data.updated && (
-      <>
-        <span class="dot">·</span>
-        <span>Updated {crag.data.updated.toISOString().slice(0,10)}</span>
-      </>
-    )}
-  </div>
+  <!-- ══════════════════════════ BREADCRUMB ══ -->
+  <nav class="bc">
+    <div class="bc-inner">
+      <a href="/crags/">← Crags</a>
+      {crag.data.mountain && <><span class="bc-sep">·</span><span>{crag.data.mountain}</span></>}
+    </div>
+  </nav>
 
-  <h1>{crag.data.title}</h1>
-  {crag.data.summary && <p class="summary">{crag.data.summary}</p>}
+  <!-- ═══════════════════════════ CRAG HEAD ══ -->
+  <header class="crag-hd">
+    <div class="crag-hd-inner">
+      <h1>{crag.data.title}</h1>
+      {crag.data.summary && <p class="summary">{crag.data.summary}</p>}
 
-  {crag.data.location && (
-    <div class="data-box">
-      <div class="data-row">
-        <span class="data-label">위치</span>
-        <span>{crag.data.location.region}{crag.data.location.city && ` — ${crag.data.location.city}`}</span>
-      </div>
-      <div class="data-row">
-        <span class="data-label">좌표</span>
-        <span class="mono">{crag.data.location.lat}°, {crag.data.location.lng}°</span>
-      </div>
-      {crag.data.rock_type && (
-        <div class="data-row">
-          <span class="data-label">암질</span>
-          <span>{crag.data.rock_type}</span>
+      {crag.data.location && (
+        <div class="info-strip">
+          <div class="iitem">
+            <span class="ilabel">위치</span>
+            <span class="ival">{crag.data.location.region}{crag.data.location.city && ` · ${crag.data.location.city}`}</span>
+          </div>
+          {crag.data.rock_type && (
+            <div class="iitem">
+              <span class="ilabel">암질</span>
+              <span class="ival">{crag.data.rock_type}</span>
+            </div>
+          )}
+          {crag.data.disciplines.length > 0 && (
+            <div class="iitem">
+              <span class="ilabel">종류</span>
+              <span class="ival">{crag.data.disciplines.join(' · ')}</span>
+            </div>
+          )}
+          {crag.data.approach_minutes && (
+            <div class="iitem">
+              <span class="ilabel">접근</span>
+              <span class="ival mono">{crag.data.approach_minutes}분</span>
+            </div>
+          )}
+          {crag.data.season_best.length > 0 && (
+            <div class="iitem">
+              <span class="ilabel">시즌</span>
+              <span class="ival">{crag.data.season_best.join(' · ')}</span>
+            </div>
+          )}
+          {routes.length > 0 && (
+            <div class="iitem">
+              <span class="ilabel">루트</span>
+              <span class="ival mono">{routes.length}개</span>
+            </div>
+          )}
+          {relatedLogs.length > 0 && (
+            <div class="iitem">
+              <span class="ilabel">방문</span>
+              <span class="ival mono">{relatedLogs.length}회</span>
+            </div>
+          )}
+          {crag.data.location.lat && crag.data.location.lng && (
+            <div class="iitem">
+              <a
+                class="imap"
+                href={`https://maps.google.com/?q=${crag.data.location.lat},${crag.data.location.lng}`}
+                target="_blank" rel="noopener"
+              >지도 ↗</a>
+            </div>
+          )}
         </div>
       )}
-      {crag.data.disciplines.length > 0 && (
-        <div class="data-row">
-          <span class="data-label">종류</span>
-          <span>{crag.data.disciplines.join(' · ')}</span>
-        </div>
-      )}
-      {crag.data.approach_minutes && (
-        <div class="data-row">
-          <span class="data-label">접근</span>
-          <span>{crag.data.approach_minutes}분</span>
-        </div>
-      )}
-      {crag.data.season_best.length > 0 && (
-        <div class="data-row">
-          <span class="data-label">시즌</span>
-          <span>{crag.data.season_best.join(' · ')}</span>
-        </div>
-      )}
-      {routes.length > 0 && (
-        <div class="data-row">
-          <span class="data-label">루트 수</span>
-          <span>{routes.length}개</span>
-        </div>
+      {crag.data.tags.length > 0 && (
+        <div class="tags">{crag.data.tags.map(t => <span class="tag">{t}</span>)}</div>
       )}
     </div>
-  )}
+  </header>
 
-  {crag.data.tags.length > 0 && (
-    <div class="tags">
-      {crag.data.tags.map(t => <span class="tag">{t}</span>)}
-    </div>
-  )}
+  <!-- ════════════════════════ ROUTES ══ -->
+  {routes.length > 0 && !crag.data.crag_type.includes('gym') && (
+    <section class="routes-sec">
+      <div class="routes-inner">
+        <div class="sec-eyebrow">Routes — 루트 목록</div>
 
-  {routes.length > 0 && (
-    <section class="routes-section">
-      <div class="eyebrow" style="margin-top:3rem;">Routes — 루트 목록</div>
-      {sectorNames.map(sector => (
-        <div class="sector-block">
-          {sectorNames.length > 1 && <div class="sector-label">{sector}</div>}
-          <table class="route-table">
-            <thead>
-              <tr>
-                <th class="col-num">#</th>
-                <th>이름</th>
-                <th class="col-grade">난이도</th>
-                <th class="col-len">길이</th>
-                <th class="col-style">스타일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {routesBySector[sector].map(r => (
-                <tr>
-                  <td class="col-num mono">{r.number ?? '—'}</td>
-                  <td>
-                    <span class="route-name">{r.name ?? '(미상)'}</span>
-                    {r.notes && <span class="route-note">{r.notes}</span>}
-                    {r.pitches.length > 0 && (
-                      <div class="pitch-inline">
-                        {r.pitches.map(p => (
-                          <span class="pitch-pip">P{p.number}{p.grade ? ` ${p.grade}` : ''}</span>
-                        ))}
+        {crag.data.crag_type.includes('multi-pitch') ? (
+          // ── 멀티피치: 루트 카드 레이아웃 ──
+          <div class="mp-list">
+            {routes.map(r => {
+              const refLogs = routeLogMap.get(r.id) ?? [];
+              const pitchCount = r.pitches.length > 0 ? r.pitches.length : (r.pitches_count ?? 0);
+              return (
+                <div class="mp-card">
+                  <div class="mp-card-hd">
+                    <div class="mp-title-row">
+                      <span class="mp-rname">{r.name ?? r.id}</span>
+                      <div class="mp-badges">
+                        {r.grade && <span class="gbadge" style={`background:${gColor(r.grade)};color:${gText(r.grade)}`}>{r.grade}</span>}
+                        {pitchCount > 0 && <span class="mp-pitchcount mono">{pitchCount}P</span>}
+                        {r.style && <span class="style-chip mono">{r.style}</span>}
+                      </div>
+                    </div>
+                    {r.notes && <p class="mp-notes">{r.notes}</p>}
+                    {refLogs.length > 0 && (
+                      <div class="rroute-logs">
+                        {refLogs.map(l => {
+                          const d = l.data.date;
+                          const ds = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+                          return <a href={`/logs/${l.slug}/`} class="rroute-log-link mono">{ds}</a>;
+                        })}
                       </div>
                     )}
-                  </td>
-                  <td class="col-grade mono">{r.grade ?? '—'}</td>
-                  <td class="col-len mono">
-                    {r.length_m ? `${r.length_m}m` : r.pitches_count ? `${r.pitches_count}P` : '—'}
-                  </td>
-                  <td class="col-style">{r.style && <span class="style-chip">{r.style}</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+                  </div>
+                  {r.pitches.length > 0 && (
+                    <table class="pitch-tbl">
+                      <thead>
+                        <tr>
+                          <th class="pt-num">피치</th>
+                          <th>타입</th>
+                          <th class="pt-grade">난이도</th>
+                          <th class="pt-len">길이</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {r.pitches.map(p => (
+                          <tr>
+                            <td class="pt-num mono">P{p.number}</td>
+                            <td class="pt-type">{p.type ?? '—'}</td>
+                            <td class="pt-grade">
+                              {p.grade
+                                ? <span class="gbadge" style={`background:${gColor(p.grade)};color:${gText(p.grade)}`}>{p.grade}</span>
+                                : <span class="gdash mono">—</span>
+                              }
+                            </td>
+                            <td class="pt-len mono">{p.length ?? (p.length_m ? `${p.length_m}m` : '—')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          // ── 스포트/기본: 테이블 레이아웃 ──
+          (() => {
+            const visibleSectors = sectorIds.filter(s => (byS[s]?.length ?? 0) > 0);
+            const multiSector = visibleSectors.length > 1;
+            return visibleSectors.map(sectorId => (
+              <div class="sector-blk">
+                {multiSector && <div class="sector-label">{sectorLabel(sectorId)}</div>}
+                <table class="rtable">
+                  <thead>
+                    <tr>
+                      <th class="th-num">#</th>
+                      <th>이름</th>
+                      <th class="th-grade">난이도</th>
+                      <th class="th-len">길이</th>
+                      <th class="th-style">스타일</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byS[sectorId].map(r => {
+                      const isMultiPitch = r.pitches.length > 0;
+                      const refLogs = routeLogMap.get(r.id) ?? [];
+                      return isMultiPitch ? (
+                        <>
+                          <tr class="tr-multi-hd">
+                            <td class="td-num mono">{r.number ?? '—'}</td>
+                            <td>
+                              <span class="rname">{r.name ?? '(미상)'}</span>
+                              {r.notes && <span class="rnote">{r.notes}</span>}
+                              {refLogs.length > 0 && (
+                                <div class="rroute-logs">
+                                  {refLogs.map(l => {
+                                    const d = l.data.date;
+                                    const ds = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+                                    return <a href={`/logs/${l.slug}/`} class="rroute-log-link mono">{ds}</a>;
+                                  })}
+                                </div>
+                              )}
+                            </td>
+                            <td class="th-grade">
+                              {r.grade
+                                ? <span class="gbadge" style={`background:${gColor(r.grade)};color:${gText(r.grade)}`}>{r.grade}</span>
+                                : <span class="gdash mono">—</span>
+                              }
+                            </td>
+                            <td class="th-len mono">{r.pitches_count ? `${r.pitches_count}P` : `${r.pitches.length}P`}</td>
+                            <td class="th-style">{r.style && <span class="style-chip mono">{r.style}</span>}</td>
+                          </tr>
+                          {r.pitches.map(p => (
+                            <tr class="tr-pitch">
+                              <td></td>
+                              <td class="td-pitch-row mono">
+                                <span class="pitch-num">P{p.number}</span>
+                                {p.type && <span class="pitch-type">{p.type}</span>}
+                                {p.description && <span class="pitch-desc">{p.description}</span>}
+                              </td>
+                              <td class="th-grade">
+                                {p.grade
+                                  ? <span class="gbadge" style={`background:${gColor(p.grade)};color:${gText(p.grade)}`}>{p.grade}</span>
+                                  : null
+                                }
+                              </td>
+                              <td class="th-len mono">{p.length ?? (p.length_m ? `${p.length_m}m` : '—')}</td>
+                              <td></td>
+                            </tr>
+                          ))}
+                        </>
+                      ) : (
+                        <tr>
+                          <td class="td-num mono">{r.number ?? '—'}</td>
+                          <td>
+                            <span class="rname">{r.name ?? '(미상)'}</span>
+                            {r.notes && <span class="rnote">{r.notes}</span>}
+                            {refLogs.length > 0 && (
+                              <div class="rroute-logs">
+                                {refLogs.map(l => {
+                                  const d = l.data.date;
+                                  const ds = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+                                  return <a href={`/logs/${l.slug}/`} class="rroute-log-link mono">{ds}</a>;
+                                })}
+                              </div>
+                            )}
+                          </td>
+                          <td class="th-grade">
+                            {r.grade
+                              ? <span class="gbadge" style={`background:${gColor(r.grade)};color:${gText(r.grade)}`}>{r.grade}</span>
+                              : <span class="gdash mono">—</span>
+                            }
+                          </td>
+                          <td class="th-len mono">{r.length_m ? `${r.length_m}m` : r.pitches_count ? `${r.pitches_count}P` : '—'}</td>
+                          <td class="th-style">{r.style && <span class="style-chip mono">{r.style}</span>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ));
+          })()
+        )}
+      </div>
     </section>
   )}
 
-  <hr class="rule" style="margin-top: 3rem;" />
-  <div class="prose"><Content /></div>
+  <!-- ══════════════════════════════ PROSE ══ -->
+  <div class="prose-sec">
+    <div class="prose-inner">
+      <div class="prose"><Content /></div>
+    </div>
+  </div>
 
+  <!-- ════════════════════ RELATED LOGS ══ -->
   {relatedLogs.length > 0 && (
-    <section class="related">
-      <hr class="rule-ornate" />
-      <div class="eyebrow">이 암장과 함께한 날들</div>
-      <ul class="related-list">
-        {relatedLogs.map(log => (
-          <li>
-            <a href={`/logs/${log.slug}/`}>
-              <span class="related-date mono">{log.data.date.toISOString().slice(0,10)}</span>
-              <span class="related-title">{log.data.title}</span>
-              {log.data.weather && <span class="related-weather mono">{log.data.weather}</span>}
-            </a>
-          </li>
-        ))}
-      </ul>
+    <section class="related-sec">
+      <div class="related-inner">
+        <hr class="ornate" />
+        <div class="sec-eyebrow">이 암장과 함께한 날들</div>
+        <div class="related-list">
+          {relatedLogs.map(log => {
+            const sv = log.data.routes.filter(r=>['onsight','flash','redpoint','send'].includes(r.status)).length;
+            const d = log.data.date;
+            return (
+              <a href={`/logs/${log.slug}/`} class="rlog">
+                <div class="rlog-date">
+                  <span class="rlog-day mono">{String(d.getDate()).padStart(2,'0')}</span>
+                  <span class="rlog-ym mono">{d.getFullYear()}.{String(d.getMonth()+1).padStart(2,'0')}</span>
+                </div>
+                <div class="rlog-body">
+                  <div class="rlog-title">{log.data.title}</div>
+                  <div class="rlog-meta">
+                    {log.data.sector && <span class="rlog-sector">{log.data.sector}</span>}
+                    {log.data.weather && <span>{log.data.weather}</span>}
+                  </div>
+                </div>
+                {sv > 0 && (
+                  <div class="rlog-result">
+                    <span class="rsend">{sv}<small>SENT</small></span>
+                  </div>
+                )}
+              </a>
+            );
+          })}
+        </div>
+      </div>
     </section>
   )}
 
-</div>
 </article>
 
 <style>
-  .doc-meta {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--stone-500);
-    margin-bottom: 2rem;
-    display: flex;
-    gap: 0.6em;
-    align-items: center;
-  }
-  .doc-meta a { border: none; color: var(--stone-700); }
-  .doc-meta a:hover { color: var(--ochre); }
-  .doc-meta .dot { opacity: 0.5; }
-
-  h1 { font-family: 'Fraunces', serif; margin-bottom: 1rem; }
-  .summary {
-    font-family: 'Fraunces', serif;
-    font-style: italic;
-    font-size: 1.2rem;
-    line-height: 1.4;
-    color: var(--stone-900);
-    margin: 1rem 0 2rem;
-  }
+  .crag-detail { min-height: 100vh; padding-bottom: 6rem; }
   .mono { font-family: 'JetBrains Mono', monospace; }
 
-  .data-box {
-    background: var(--paper-soft);
-    border: 1px solid var(--rule);
-    padding: 1.2rem 1.5rem;
-    margin: 2rem 0;
-    font-size: 0.9rem;
-  }
-  .data-row {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    padding: 0.45rem 0;
-    border-bottom: 1px solid var(--rule);
-    gap: 1rem;
-  }
-  .data-row:last-child { border-bottom: none; }
-  .data-label {
+  /* ── BREADCRUMB ── */
+  .bc { border-bottom: 1px solid var(--rule); padding: 0.9rem 2rem; }
+  .bc-inner {
+    max-width: 920px; margin: 0 auto;
+    display: flex; gap: 0.6em; align-items: center;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--stone-500);
-    padding-top: 2px;
+    font-size: 0.68rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--stone-500);
+  }
+  .bc-inner a { border: none; color: var(--stone-700); }
+  .bc-inner a:hover { color: var(--ochre); }
+  .bc-sep { opacity: 0.4; }
+
+  /* ── CRAG HEAD ── */
+  .crag-hd { padding: 3.5rem 2rem 2.5rem; border-bottom: 1px solid var(--rule); }
+  .crag-hd-inner { max-width: 920px; margin: 0 auto; }
+  h1 {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 1.08;
+    margin-bottom: 0.7rem;
+  }
+  .summary {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    
+    font-size: 1.1rem;
+    line-height: 1.5;
+    color: var(--stone-700);
+    margin: 0 0 2rem;
   }
 
-  .routes-section { margin-bottom: 0; }
-  .sector-block { margin-bottom: 2rem; }
-  .sector-label {
+  /* INFO STRIP */
+  .info-strip {
+    display: flex;
+    flex-wrap: wrap;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper-soft);
+    margin-bottom: 1.5rem;
+  }
+  .iitem {
+    display: flex;
+    flex-direction: column;
+    padding: 0.85rem 1.2rem;
+    border-right: 1px solid var(--rule);
+    min-width: 0;
+  }
+  .iitem:last-child { border-right: none; }
+  .ilabel {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    letter-spacing: 0.12em;
+    font-size: 0.58rem;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--stone-500);
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.3rem;
-    border-bottom: 1px solid var(--rule);
+    margin-bottom: 0.3rem;
   }
-  .route-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-  .route-table th {
-    text-align: left;
-    padding: 0.7rem 0.5rem;
-    border-bottom: 2px solid var(--ink);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--stone-500);
-    font-weight: 500;
-  }
-  .route-table td { padding: 0.85rem 0.5rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  .route-table tr:last-child td { border-bottom: none; }
-  .route-table tr:hover td { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
-  .col-num  { width: 36px; color: var(--stone-500); }
-  .col-grade { width: 80px; }
-  .col-len  { width: 70px; color: var(--stone-700); }
-  .col-style { width: 80px; }
-  .route-name { font-family: 'Hahmlet', serif; font-size: 1rem; display: block; }
-  .route-note { display: block; font-size: 0.78rem; color: var(--stone-700); margin-top: 0.15rem; }
-  .pitch-inline { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.4rem; }
-  .pitch-pip {
+  .ival { font-size: 0.88rem; color: var(--ink); font-weight: 500; }
+  .imap {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.65rem;
-    padding: 0.15em 0.5em;
-    background: var(--stone-100);
-    color: var(--stone-700);
-    border: 1px solid var(--rule);
-  }
-  .style-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--stone-500); }
-
-  .related { margin-top: 4rem; }
-  .related-list { list-style: none; padding: 0; margin: 1.5rem 0 0; }
-  .related-list li { border-bottom: 1px solid var(--rule); }
-  .related-list li:first-child { border-top: 1px solid var(--rule); }
-  .related-list a {
-    display: grid;
-    grid-template-columns: 110px 1fr auto;
-    gap: 1rem;
-    padding: 1rem 0;
+    letter-spacing: 0.08em;
+    color: var(--ochre);
     border: none;
-    color: var(--ink);
-    align-items: baseline;
-    transition: background 0.15s;
+    text-transform: uppercase;
+    margin-top: auto;
+    padding-top: 1.1rem;
   }
-  .related-list a:hover { background: color-mix(in srgb, var(--ochre) 5%, transparent); color: var(--ink); }
-  .related-date { font-size: 0.8rem; color: var(--stone-500); }
-  .related-title { font-family: 'Fraunces', serif; font-size: 1.1rem; }
-  .related-weather { font-size: 0.75rem; color: var(--stone-500); }
+  .imap:hover { color: var(--ochre); opacity: 0.7; }
+  .tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .tag { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; padding: 0.2em 0.6em; background: var(--stone-100); color: var(--stone-700); border: 1px solid var(--rule); }
 
-  @media (max-width: 640px) {
-    .data-row { grid-template-columns: 1fr; gap: 0.2rem; padding: 0.6rem 0; }
-    .col-len, .col-style { display: none; }
-    .related-list a { grid-template-columns: 1fr; gap: 0.3rem; padding: 0.8rem 0; }
+  /* SECTION EYEBROW */
+  .sec-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-bottom: 1.5rem;
+  }
+  .sec-eyebrow::before { content: ''; display: inline-block; width: 16px; height: 1px; background: var(--ochre); }
+
+  /* ── ROUTES ── */
+  .routes-sec { padding: 3rem 2rem 0; border-top: 1px solid var(--rule); }
+  .routes-inner { max-width: 920px; margin: 0 auto; }
+  .sector-blk { margin-bottom: 2.5rem; }
+  .sector-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--stone-500); margin-bottom: 0.6rem;
+    padding-bottom: 0.4rem; border-bottom: 1px solid var(--rule);
+  }
+  .rtable { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .rtable th {
+    text-align: left; padding: 0.7rem 0.6rem;
+    border-bottom: 1px solid var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--stone-500); font-weight: 500;
+  }
+  .rtable td {
+    padding: 0.9rem 0.6rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .rtable tr:last-child td { border-bottom: none; }
+  .rtable tr:hover td { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
+  .th-num   { width: 32px; }
+  .th-grade { width: 82px; }
+  .th-len   { width: 62px; color: var(--stone-700); font-size: 0.82rem; }
+  .th-style { width: 68px; }
+  .td-num   { color: var(--stone-500); font-size: 0.78rem; }
+  .rname { font-family: 'Spoqa Han Sans Neo', sans-serif; font-size: 0.98rem; display: block; letter-spacing: -0.01em; }
+  .rnote { display: block; font-size: 0.76rem; color: var(--stone-700); margin-top: 0.12rem; }
+  .ppips { display: flex; gap: 0.28rem; flex-wrap: wrap; margin-top: 0.4rem; }
+  .ppip { font-size: 0.58rem; padding: 0.12em 0.42em; background: var(--stone-100); color: var(--stone-700); border: 1px solid var(--rule); }
+  .gbadge { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; padding: 0.2em 0.5em; border-radius: 2px; font-weight: 500; white-space: nowrap; }
+  .gdash  { color: var(--stone-500); }
+  .style-chip { font-size: 0.62rem; color: var(--stone-500); }
+  /* Multi-pitch rows */
+  .tr-multi-hd td { background: color-mix(in srgb, var(--ochre) 5%, var(--paper-card)); border-bottom: 1px solid var(--rule-strong); }
+  .tr-pitch td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--rule); background: var(--paper-soft); }
+  .td-pitch-row { display: flex; align-items: center; gap: 0.5rem; }
+  .pitch-num { font-size: 0.65rem; font-weight: 600; color: var(--ochre); min-width: 1.8rem; }
+  .pitch-type { font-size: 0.68rem; color: var(--stone-700); background: var(--stone-100); border: 1px solid var(--rule); padding: 0.1em 0.4em; }
+  .pitch-desc { font-size: 0.72rem; color: var(--stone-500); }
+  .rroute-logs { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.35rem; }
+  .rroute-log-link {
+    font-size: 0.58rem; padding: 0.12em 0.5em;
+    background: color-mix(in srgb, var(--ochre) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ochre) 25%, transparent);
+    color: var(--ochre); border-radius: 2px;
+    text-decoration: none; transition: opacity 0.1s;
+  }
+  .rroute-log-link:hover { opacity: 0.7; }
+  .rlog-sector {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem; letter-spacing: 0.04em;
+    color: var(--stone-500);
+    background: var(--stone-100);
+    border: 1px solid var(--rule);
+    padding: 0.1em 0.45em; margin-right: 0.4rem;
+  }
+
+  /* ── MULTI-PITCH CARDS ── */
+  .mp-list { display: flex; flex-direction: column; gap: 1.5rem; }
+  .mp-card {
+    border: 1px solid var(--rule-strong);
+    background: var(--paper-card);
+  }
+  .mp-card-hd {
+    padding: 1.2rem 1.4rem 1rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .mp-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+  }
+  .mp-rname {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .mp-badges { display: flex; align-items: center; gap: 0.4rem; }
+  .mp-pitchcount {
+    font-size: 0.7rem;
+    padding: 0.18em 0.6em;
+    background: var(--stone-100);
+    border: 1px solid var(--rule);
+    color: var(--stone-700);
+  }
+  .mp-notes {
+    font-size: 0.82rem; color: var(--stone-700);
+    margin: 0.3rem 0 0;
+  }
+  .pitch-tbl {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  .pitch-tbl th {
+    text-align: left; padding: 0.55rem 1rem;
+    background: var(--paper-soft);
+    border-bottom: 1px solid var(--rule);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--stone-500);
+    font-weight: 500;
+  }
+  .pitch-tbl td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: middle;
+  }
+  .pitch-tbl tr:last-child td { border-bottom: none; }
+  .pitch-tbl tr:hover td { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
+  .pt-num { width: 52px; color: var(--ochre); font-weight: 600; font-size: 0.82rem; }
+  .pt-type { color: var(--stone-700); font-size: 0.85rem; }
+  .pt-grade { width: 82px; }
+  .pt-len { width: 62px; color: var(--stone-700); }
+
+  /* ── PROSE ── */
+  .prose-sec { padding: 3rem 2rem 0; border-top: 1px solid var(--rule); }
+  .prose-inner { max-width: 920px; margin: 0 auto; }
+
+  /* ── RELATED ── */
+  .related-sec { padding: 0 2rem; }
+  .related-inner { max-width: 920px; margin: 0 auto; }
+  .ornate {
+    border: 0; height: 1px; background: var(--rule);
+    margin: 4rem auto; position: relative; max-width: 40%;
+  }
+  .ornate::after {
+    content: '◆'; position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%,-50%);
+    background: var(--paper); padding: 0 0.8em;
+    color: var(--stone-300); font-size: 0.6rem;
+  }
+  .related-list { display: flex; flex-direction: column; }
+  .rlog {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 1.2rem;
+    padding: 1.1rem 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink); border-left: none;
+    align-items: center;
+    transition: background 0.12s, padding-left 0.12s;
+  }
+  .related-list .rlog:first-child { border-top: 1px solid var(--rule); }
+  .rlog:hover { background: color-mix(in srgb, var(--ochre) 4%, transparent); color: var(--ink); border-bottom-color: var(--rule); padding-left: 0.4rem; }
+  .rlog-date { text-align: right; }
+  .rlog-day { display: block; font-size: 1rem; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; }
+  .rlog-ym  { display: block; font-size: 0.58rem; color: var(--stone-500); margin-top: 0.1rem; }
+  .rlog-title { font-family: 'Spoqa Han Sans Neo', sans-serif; font-size: 1rem; letter-spacing: -0.02em; }
+  .rlog-meta  { font-size: 0.75rem; color: var(--stone-500); margin-top: 0.12rem; }
+  .rsend {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1.3rem; font-weight: 600;
+    color: var(--moss); display: flex;
+    flex-direction: column; align-items: flex-end;
+    line-height: 1; gap: 0.1rem; letter-spacing: -0.04em;
+  }
+  .rsend small { font-family: 'JetBrains Mono', monospace; font-size: 0.52rem; letter-spacing: 0.14em; opacity: 0.6; }
+
+  @media (max-width: 720px) {
+    .bc, .crag-hd, .routes-sec, .prose-sec { padding-left: 1.25rem; padding-right: 1.25rem; }
+    .related-sec { padding: 0 1.25rem; }
+    .info-strip { flex-direction: column; }
+    .iitem { border-right: none; border-bottom: 1px solid var(--rule); flex-direction: row; justify-content: space-between; align-items: center; }
+    .iitem:last-child { border-bottom: none; }
+    .ilabel { margin-bottom: 0; }
+    .th-len, .th-style { display: none; }
+    .rlog { grid-template-columns: 52px 1fr; gap: 0.8rem; }
+    .rlog-result { display: none; }
+    .routes-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
+  @media (max-width: 374px) {
+    .bc, .crag-hd, .routes-sec, .prose-sec { padding-left: 1rem; padding-right: 1rem; }
+    .related-sec { padding: 0 1rem; }
   }
 </style>
 </BaseLayout>

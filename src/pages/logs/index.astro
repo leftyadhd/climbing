@@ -5,455 +5,564 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 const logs = (await getCollection('logs')).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
 );
-
 const allCrags = await getCollection('crags');
 
-// crag slug → title, mountain
+// NFC normalization
 const cragTitleMap = new Map<string, string>();
-const cragMountainMap = new Map<string, string>(); // slug → mountain label
+const cragMountainMap = new Map<string, string>();
+const cragSlugMap = new Map<string, string>(); // key → actual slug for link
 for (const c of allCrags) {
-  cragTitleMap.set(c.slug, c.data.title);
-  cragMountainMap.set(c.slug, c.data.mountain ?? c.data.title);
+  const key = c.id.replace(/\.md$/, '').split('/').pop()!.normalize('NFC');
+  const slug = c.slug ?? c.id.replace(/\.md$/, '').split('/').pop()!;
+  cragTitleMap.set(key, c.data.title);
+  cragMountainMap.set(key, c.data.mountain ?? c.data.title);
+  cragSlugMap.set(key, slug);
 }
+const getCragTitle   = (s: string) => cragTitleMap.get(s.normalize('NFC')) ?? s;
+const getCragMountain= (s: string) => cragMountainMap.get(s.normalize('NFC')) ?? '';
+const getCragSlug    = (s: string) => cragSlugMap.get(s.normalize('NFC')) ?? null;
 
 const cragRouteNameMap = new Map<string, string>();
+const cragTypeMap = new Map<string, string>();
 for (const crag of allCrags) {
   for (const r of crag.data.routes) {
     if (r.name) cragRouteNameMap.set(r.id, r.name);
   }
+  const key = crag.id.replace(/\.md$/, '').split('/').pop()!.normalize('NFC');
+  const t = crag.data.crag_type;
+  cragTypeMap.set(key,
+    t.includes('multi-pitch') ? 'multi-pitch' :
+    t.includes('hard-free')   ? 'hard-free'   :
+    t.includes('gym')         ? 'gym'          : 'other'
+  );
 }
-
-const years = [...new Set(logs.map(l => l.data.date.getFullYear()))].sort().reverse();
-
-// mountain 필터 목록 (logs에 실제 등장하는 것만)
-const mountainsInLogs = [
-  ...new Set(
-    logs
-      .map(l => l.data.crag ? cragMountainMap.get(l.data.crag) : null)
-      .filter((m): m is string => !!m)
-  )
-].sort();
+const getCragType = (s: string) => cragTypeMap.get(s.normalize('NFC')) ?? 'other';
 
 const climbLogs = logs.filter(l => l.data.type !== 'misc');
-const totalSends = climbLogs.reduce((sum, l) =>
-  sum + l.data.routes.filter(r => ['onsight','flash','redpoint','send'].includes(r.status)).length, 0
-);
+const years = [...new Set(logs.map(l => l.data.date.getFullYear()))].sort().reverse();
+const totalSends = climbLogs.reduce((s, l) =>
+  s + l.data.routes.filter(r => ['onsight','flash','redpoint','send'].includes(r.status)).length, 0);
+const mountainsInLogs = [...new Set(
+  logs.map(l => l.data.crag ? getCragMountain(l.data.crag) : null).filter((m): m is string => !!m)
+)].sort();
 
-const now = new Date();
-now.setHours(0, 0, 0, 0);
+// 파트너 빈도 집계 → 2회 이상만 필터에 노출
+const partnerFreq = new Map<string, number>();
+for (const l of logs) {
+  for (const p of l.data.partners) {
+    if (p && p !== '게스트') partnerFreq.set(p, (partnerFreq.get(p) ?? 0) + 1);
+  }
+}
+const partnersInLogs = [...partnerFreq.entries()]
+  .filter(([, n]) => n >= 2)
+  .sort((a, b) => b[1] - a[1])
+  .map(([p]) => p);
 
-const statusLabel: Record<string, string> = {
-  onsight: 'OS', flash: 'FL', redpoint: 'RP', send: 'SD',
-  projecting: 'PJ', attempt: 'AT', failed: '—',
-};
-const statusGroup: Record<string, string> = {
-  onsight: 'send', flash: 'send', redpoint: 'send', send: 'send',
-  projecting: 'project', attempt: 'project', failed: 'fail',
-};
+// Group by year
+const logsByYear = new Map<number, typeof logs>();
+for (const log of logs) {
+  const y = log.data.date.getFullYear();
+  if (!logsByYear.has(y)) logsByYear.set(y, []);
+  logsByYear.get(y)!.push(log);
+}
+const yearGroups = [...logsByYear.entries()].sort((a, b) => b[0] - a[0]);
+
+const now = new Date(); now.setHours(0,0,0,0);
+
+const sLabel: Record<string,string> = { onsight:'OS', flash:'FL', redpoint:'RP', send:'SD', projecting:'PJ', attempt:'AT', failed:'—' };
+const sGroup: Record<string,string> = { onsight:'send', flash:'send', redpoint:'send', send:'send', projecting:'project', attempt:'project', failed:'fail' };
+
+const DAYS_KO = ['일','월','화','수','목','금','토'];
 ---
-<BaseLayout title="등반로그">
-<div class="container">
+<BaseLayout title="등반 로그">
+<div class="logs-root">
 
-  <div class="page-head">
-    <div>
-      <div class="eyebrow">Field Notes — 등반 기록</div>
-      <h1>기록의 <em>층위.</em></h1>
-    </div>
-    <div class="head-stats">
-      <div class="hs"><span class="hs-n">{climbLogs.length}</span><span class="hs-l">세션</span></div>
-      <div class="hs"><span class="hs-n">{totalSends}</span><span class="hs-l">완등</span></div>
-      <div class="hs"><span class="hs-n">{years.length}</span><span class="hs-l">년</span></div>
+  <!-- ══════════════════════════ PAGE HEADER ══ -->
+  <div class="page-hd">
+    <div class="page-hd-inner">
+      <div class="phd-left">
+        <div class="s-eyebrow">Field Notes</div>
+        <h1>기록의 <em>층위.</em></h1>
+      </div>
+      <div class="phd-right">
+        <div class="phd-stats">
+          <div class="pstat"><span class="pstat-n">{climbLogs.length}</span><span class="pstat-l">세션</span></div>
+          <div class="pstat"><span class="pstat-n">{totalSends}</span><span class="pstat-l">완등</span></div>
+          <div class="pstat"><span class="pstat-n">{years.length}</span><span class="pstat-l">년</span></div>
+        </div>
+        <div class="type-legend mono">
+          <span class="tleg tleg--mp">■ 멀티피치</span>
+          <span class="tleg tleg--hf">■ 하드프리</span>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- 필터 바 -->
-  <div class="filter-bar">
-    <div class="filter-group">
-      <button class="filter-btn active" data-type="year" data-value="all">전체</button>
-      {years.map(y => (
-        <button class="filter-btn" data-type="year" data-value={String(y)}>{y}</button>
-      ))}
-    </div>
-    {mountainsInLogs.length > 0 && (
-      <div class="filter-group">
-        <button class="filter-btn active" data-type="mountain" data-value="all">모든 암장</button>
-        {mountainsInLogs.map(m => (
-          <button class="filter-btn" data-type="mountain" data-value={m}>{m}</button>
+  <!-- ════════════════════════════ FILTER BAR ══ -->
+  <div class="filter-bar" id="filter-bar">
+    <div class="filter-inner">
+      <div class="filter-row">
+        <button class="fpill active" data-type="year" data-value="all">전체</button>
+        {years.map(y => (
+          <button class="fpill" data-type="year" data-value={String(y)}>{y}</button>
         ))}
       </div>
-    )}
+      {mountainsInLogs.length > 0 && (
+        <div class="filter-row">
+          <button class="fpill active" data-type="mountain" data-value="all">모든 산</button>
+          {mountainsInLogs.map(m => (
+            <button class="fpill" data-type="mountain" data-value={m}>{m}</button>
+          ))}
+        </div>
+      )}
+      <div class="filter-row">
+        <button class="fpill active" data-type="result" data-value="all">모든 결과</button>
+        <button class="fpill" data-type="result" data-value="send">완등 있음</button>
+        <button class="fpill" data-type="result" data-value="project">프로젝팅</button>
+        <button class="fpill" data-type="result" data-value="none">루트 미기입</button>
+      </div>
+      {partnersInLogs.length > 0 && (
+        <div class="filter-row">
+          <button class="fpill active" data-type="partner" data-value="all">모든 파트너</button>
+          {partnersInLogs.map(p => (
+            <button class="fpill" data-type="partner" data-value={p}>{p}</button>
+          ))}
+        </div>
+      )}
+    </div>
   </div>
 
-  <!-- 로그 목록 -->
-  <div class="log-list" id="log-list">
-    {logs.map(log => {
-      const cragSlug = log.data.crag;
-      const cragTitle = cragSlug ? (cragTitleMap.get(cragSlug) ?? cragSlug) : null;
-      const cragEntry = cragSlug ? allCrags.find(c => c.slug === cragSlug) : null;
-      const mountain = cragSlug ? (cragMountainMap.get(cragSlug) ?? '') : '';
-      const sends = log.data.routes.filter(r =>
-        ['onsight','flash','redpoint','send'].includes(r.status)
-      ).length;
-      const d = log.data.date;
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const isUpcoming = d >= now;
+  <!-- ══════════════════════════════ LOG LIST ══ -->
+  <div class="log-outer">
+    <div class="log-inner">
+      {yearGroups.map(([year, yearLogs]) => (
+        <div class="year-section" data-year-group={String(year)}>
+          <div class="year-marker">
+            <span class="year-bg" aria-hidden="true">{year}</span>
+            <span class="year-rule"></span>
+            <span class="year-meta mono">{yearLogs.filter(l=>l.data.type!=='misc').length} 세션</span>
+          </div>
+          <div class="year-entries">
+            {yearLogs.map(log => {
+              const cs = log.data.crag;
+              const cragTitle = cs ? getCragTitle(cs) : null;
+              const cragLinkSlug = cs ? getCragSlug(cs) : null;
+              const mountain = cs ? getCragMountain(cs) : '';
+              const sends = log.data.routes.filter(r=>['onsight','flash','redpoint','send'].includes(r.status)).length;
+              const hasProj = log.data.routes.some(r=>r.status==='projecting');
+              const d = log.data.date;
+              const isUpcoming = d >= now;
+              const resultKey = log.data.routes.length === 0 ? 'none' : sends > 0 ? 'send' : hasProj ? 'project' : 'fail';
+              const cragType = cs ? getCragType(cs) : 'other';
 
-      return (
-        <article
-          class={`log-card${isUpcoming ? ' log-card--upcoming' : ''}${log.data.type === 'misc' ? ' log-card--misc' : ''}`}
-          data-year={String(d.getFullYear())}
-          data-mountain={mountain}
-        >
-          <div class="card-date">
-            <span class="date-md">{mm}.{dd}</span>
-            <span class="date-y">{d.getFullYear()}</span>
+              return (
+                <article
+                  class={['entry', isUpcoming && 'entry--upcoming', log.data.type==='misc' && 'entry--misc'].filter(Boolean).join(' ')}
+                  data-year={String(d.getFullYear())}
+                  data-mountain={mountain}
+                  data-result={resultKey}
+                  data-cragtype={cragType}
+                  data-partners={log.data.partners.filter(p => p && p !== '게스트').join(',')}
+                >
+                  <div class="entry-date">
+                    <span class={`ed-day ed-day--${cragType}`}>{String(d.getDate()).padStart(2,'0')}</span>
+                    <span class="ed-dow mono">{DAYS_KO[d.getDay()]}</span>
+                    <span class="ed-mon mono">{String(d.getMonth()+1).padStart(2,'0')}월</span>
+                    {cragType === 'multi-pitch' && <span class="ed-type ed-type--mp mono">MP</span>}
+                    {cragType === 'hard-free'   && <span class="ed-type ed-type--hf mono">HF</span>}
+                  </div>
+                  <div class="entry-body">
+                    <div class="entry-meta">
+                      {log.data.type==='misc' && <span class="badge-misc">기타</span>}
+                      {cragTitle && (
+                        cragLinkSlug
+                          ? <a href={`/crags/${cragLinkSlug}/`} class="badge-crag">{cragTitle}</a>
+                          : <span class="badge-crag">{cragTitle}</span>
+                      )}
+                      {log.data.crew.length > 0 && <span class="badge-crew">{log.data.crew.join(', ')}</span>}
+                      {isUpcoming && <span class="badge-upcoming">예정</span>}
+                    </div>
+                    <h2 class="entry-title">
+                      <a href={`/logs/${log.slug}/`}>{log.data.title}</a>
+                    </h2>
+                    {log.data.routes.length > 0 && (
+                      <ul class="chips">
+                        {log.data.routes.slice(0,5).map(r => (
+                          <li class={`chip chip-${sGroup[r.status]}`}>
+                            <span class="chip-name">{r.name ?? (r.route_ref ? (cragRouteNameMap.get(r.route_ref)??r.route_ref) : '?')}</span>
+                            {r.grade && <span class="chip-grade">{r.grade}</span>}
+                            <span class="chip-st">{sLabel[r.status]}</span>
+                          </li>
+                        ))}
+                        {log.data.routes.length > 5 && <li class="chip chip-more">+{log.data.routes.length-5}</li>}
+                      </ul>
+                    )}
+                  </div>
+                  <div class="entry-result">
+                    {!isUpcoming && log.data.routes.length > 0 && sends > 0 && (
+                      <span class="res-send"><em>{sends}</em><small>SENT</small></span>
+                    )}
+                    {!isUpcoming && log.data.routes.length > 0 && sends === 0 && hasProj && (
+                      <span class="res-proj">PJ</span>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
-          <div class="card-body">
-            <div class="card-meta">
-              {log.data.type === 'misc' && <span class="misc-tag">기타</span>}
-              {cragTitle && (
-                cragEntry
-                  ? <a href={`/crags/${cragEntry.slug}/`} class="crag-tag">{cragTitle}</a>
-                  : <span class="crag-tag">{cragTitle}</span>
-              )}
-              {log.data.crew.length > 0 && (
-                <span class="partner-tag">with {log.data.crew.join(', ')}</span>
-              )}
-
-              {log.data.weather && <span class="weather-tag">{log.data.weather}</span>}
-            </div>
-            <h2 class="card-title">
-              <a href={`/logs/${log.slug}/`}>{log.data.title}</a>
-            </h2>
-            {log.data.routes.length > 0 && (
-              <ul class="route-chips">
-                {log.data.routes.slice(0, 5).map(r => (
-                  <li class={`route-chip chip-${statusGroup[r.status]}`}>
-                    <span class="chip-name">{r.name ?? (r.route_ref ? (cragRouteNameMap.get(r.route_ref) ?? r.route_ref) : '?')}</span>
-                    {r.grade && <span class="chip-grade">{r.grade}</span>}
-                    <span class="chip-status">{statusLabel[r.status]}</span>
-                  </li>
-                ))}
-                {log.data.routes.length > 5 && (
-                  <li class="route-chip chip-more">+{log.data.routes.length - 5}</li>
-                )}
-              </ul>
-            )}
-          </div>
-          <div class="card-result">
-            {isUpcoming
-              ? <span class="result-upcoming">UPCOMING</span>
-              : log.data.routes.length > 0
-                ? sends > 0
-                  ? <span class="result-send">{sends}<small>SENT</small></span>
-                  : <span class="result-proj">PJ</span>
-                : null
-            }
-          </div>
-        </article>
-      );
-    })}
+        </div>
+      ))}
+      <p class="empty-msg" id="empty-msg" style="display:none">해당 조건의 기록이 없습니다.</p>
+    </div>
   </div>
-
-  <p class="empty-msg" id="empty-msg" style="display:none;">
-    해당 조건의 기록이 없습니다.
-  </p>
 
 </div>
 
 <script>
-  const btns = document.querySelectorAll<HTMLButtonElement>('.filter-btn');
-  const cards = document.querySelectorAll<HTMLElement>('.log-card');
+  const btns = document.querySelectorAll<HTMLButtonElement>('.fpill');
+  const entries = document.querySelectorAll<HTMLElement>('.entry');
+  const yearSections = document.querySelectorAll<HTMLElement>('.year-section');
   const emptyMsg = document.getElementById('empty-msg')!;
 
   btns.forEach(btn => {
     btn.addEventListener('click', () => {
       const type = btn.dataset.type!;
-      document.querySelectorAll<HTMLButtonElement>(`.filter-btn[data-type="${type}"]`)
+      document.querySelectorAll<HTMLButtonElement>(`.fpill[data-type="${type}"]`)
         .forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      applyFilter();
+      filter();
     });
   });
 
-  function applyFilter() {
-    const year = document.querySelector<HTMLButtonElement>('.filter-btn[data-type="year"].active')?.dataset.value || 'all';
-    const mountain = document.querySelector<HTMLButtonElement>('.filter-btn[data-type="mountain"].active')?.dataset.value || 'all';
-    let visible = 0;
-    cards.forEach(card => {
-      const yMatch = year === 'all' || card.dataset.year === year;
-      const mMatch = mountain === 'all' || card.dataset.mountain === mountain;
-      const show = yMatch && mMatch;
-      card.style.display = show ? '' : 'none';
-      if (show) visible++;
+  function filter() {
+    const year    = document.querySelector<HTMLButtonElement>('.fpill[data-type="year"].active')?.dataset.value ?? 'all';
+    const mt      = document.querySelector<HTMLButtonElement>('.fpill[data-type="mountain"].active')?.dataset.value ?? 'all';
+    const result  = document.querySelector<HTMLButtonElement>('.fpill[data-type="result"].active')?.dataset.value ?? 'all';
+    const partner = document.querySelector<HTMLButtonElement>('.fpill[data-type="partner"].active')?.dataset.value ?? 'all';
+    let vis = 0;
+    entries.forEach(e => {
+      const partners = (e.dataset.partners ?? '').split(',').filter(Boolean);
+      const show =
+        (year==='all'    || e.dataset.year===year) &&
+        (mt==='all'      || e.dataset.mountain===mt) &&
+        (result==='all'  || e.dataset.result===result) &&
+        (partner==='all' || partners.includes(partner));
+      e.style.display = show ? '' : 'none';
+      if (show) vis++;
     });
-    emptyMsg.style.display = visible === 0 ? '' : 'none';
+    yearSections.forEach(s => {
+      const y = s.dataset.yearGroup;
+      const hasVis = [...s.querySelectorAll<HTMLElement>('.entry')].some(e=>e.style.display!=='none');
+      s.style.display = hasVis ? '' : 'none';
+    });
+    emptyMsg.style.display = vis===0 ? '' : 'none';
   }
 </script>
 
 <style>
-  h1 {
-    font-family: 'Fraunces', 'Hahmlet', serif;
-    font-weight: 400;
-    line-height: 1.05;
-    margin: 0;
-  }
-  h1 em { font-style: italic; color: var(--ochre); }
+  .logs-root { min-height: 100vh; padding-bottom: 6rem; }
 
-  .page-head {
+  /* ── PAGE HEADER ── */
+  .page-hd {
+    padding: 4.5rem 2rem 3.5rem;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  .page-hd-inner {
+    max-width: 1100px; margin: 0 auto;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
     gap: 2rem;
     flex-wrap: wrap;
-    margin-bottom: 2.5rem;
   }
-  .head-stats {
-    display: flex;
-    gap: 2rem;
-  }
-  .hs { text-align: right; }
-  .hs-n {
-    font-family: 'Fraunces', serif;
-    font-size: 2rem;
-    font-weight: 500;
-    display: block;
-    line-height: 1;
-    letter-spacing: -0.03em;
-  }
-  .hs-l {
+  .s-eyebrow {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.15em;
+    font-size: 0.65rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--stone-500);
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-bottom: 0.8rem;
+  }
+  .s-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 16px; height: 1px;
+    background: var(--ochre);
+  }
+  h1 {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    margin: 0;
+  }
+  h1 em {  color: var(--ochre); font-weight: 300; }
+
+  .phd-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.75rem; }
+  .phd-stats { display: flex; gap: 2.5rem; align-items: flex-end; }
+  .type-legend { display: flex; gap: 1rem; font-size: 0.6rem; letter-spacing: 0.1em; }
+  .tleg { opacity: 0.7; }
+  .tleg--mp { color: #4a9eff; }
+  .tleg--hf { color: var(--ochre); }
+  .pstat { text-align: right; }
+  .pstat-n {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 2.4rem;
+    font-weight: 600;
+    display: block;
+    line-height: 1;
+    letter-spacing: -0.05em;
+    font-variant-numeric: tabular-nums;
+  }
+  .pstat-l {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    display: block;
+    margin-top: 0.2rem;
   }
 
-  /* 필터 바 */
+  /* ── FILTER BAR ── */
   .filter-bar {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    margin-bottom: 2.5rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid var(--rule-strong);
+    position: sticky;
+    top: 56px;
+    z-index: 20;
+    background: color-mix(in srgb, var(--paper) 95%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--rule);
+    padding: 0.75rem 2rem;
   }
-  .filter-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-  .filter-btn {
-    font-family: Pretendard, sans-serif;
-    font-size: 0.78rem;
-    font-weight: 500;
-    padding: 0.35em 0.9em;
+  .filter-inner { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 0.4rem; }
+  .filter-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .fpill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.28em 0.9em;
     border: 1px solid var(--rule-strong);
     background: transparent;
     color: var(--stone-700);
     cursor: pointer;
-    letter-spacing: 0.03em;
-    transition: all 0.15s;
-    border-radius: 2px;
+    border-radius: 100px;
+    transition: all 0.12s;
+    line-height: 1.7;
   }
-  .filter-btn:hover { border-color: var(--ochre); color: var(--ochre); }
-  .filter-btn.active {
-    background: var(--ink);
-    border-color: var(--ink);
-    color: var(--paper);
-  }
+  .fpill:hover { border-color: var(--ochre); color: var(--ochre); }
+  .fpill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
-  /* 로그 카드 */
-  .log-list { display: flex; flex-direction: column; gap: 0; }
-  .log-card {
-    display: grid;
-    grid-template-columns: 64px 1fr auto;
+  /* ── LOG OUTER ── */
+  .log-outer { padding: 0 2rem 0; }
+  .log-inner { max-width: 1100px; margin: 0 auto; }
+
+  /* ── YEAR SECTION ── */
+  .year-section { padding-top: 3rem; }
+  .year-section + .year-section { border-top: 1px solid var(--rule); }
+  .year-marker {
+    display: flex;
+    align-items: center;
     gap: 1.5rem;
-    padding: 1.8rem 0;
-    border-bottom: 1px solid var(--rule);
-    align-items: start;
-    transition: background 0.15s;
+    margin-bottom: 0.5rem;
+    position: relative;
   }
-  .log-card:first-child { border-top: 1px solid var(--rule); }
-  .log-card:hover { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
-
-  .log-card--misc {
-    opacity: 0.55;
+  .year-bg {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 700;
+    color: var(--stone-200);
+    line-height: 1;
+    letter-spacing: -0.06em;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
   }
-  .log-card--misc:hover { opacity: 0.8; }
-  .misc-tag {
-    font-size: 0.68rem;
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 0.15em 0.6em;
-    background: var(--stone-100);
-    color: var(--stone-500);
-    border: 1px solid var(--rule);
-    border-radius: 2px;
+  .year-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
   }
-
-  .log-card--upcoming {
-    opacity: 0.6;
-    border-bottom-style: dashed;
-  }
-  .log-card--upcoming:first-child { border-top-style: dashed; }
-  .log-card--upcoming .date-md { color: var(--stone-500); }
-  .log-card--upcoming .card-title a { color: var(--stone-700); }
-  .log-card--upcoming:hover { background: color-mix(in srgb, var(--stone-500) 4%, transparent); opacity: 0.8; }
-
-  .card-date {
-    text-align: right;
-    padding-top: 0.3rem;
-  }
-  .date-md {
-    display: block;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--ink);
-    letter-spacing: 0.02em;
-  }
-  .date-y {
-    display: block;
-    font-family: 'JetBrains Mono', monospace;
+  .year-meta {
     font-size: 0.65rem;
     color: var(--stone-500);
-    letter-spacing: 0.05em;
-    margin-top: 0.2rem;
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
   }
+  .year-entries { display: flex; flex-direction: column; }
 
-  .card-body { min-width: 0; }
-  .card-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 0.5rem;
-    align-items: center;
+  /* ── ENTRY (LOG CARD) ── */
+  .entry {
+    display: grid;
+    grid-template-columns: 52px 1fr auto;
+    gap: 1.5rem;
+    padding: 1.5rem 0 1.5rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    border-left: 2.5px solid transparent;
+    align-items: start;
+    transition: background 0.12s, border-left-color 0.12s;
   }
-  .crag-tag, .partner-tag, .weather-tag {
-    font-size: 0.72rem;
-    font-weight: 500;
-    padding: 0.15em 0.6em;
-    letter-spacing: 0.04em;
-    border-radius: 2px;
-  }
-  .crag-tag {
-    background: color-mix(in srgb, var(--ochre) 12%, transparent);
-    color: var(--ochre);
-    border: 1px solid color-mix(in srgb, var(--ochre) 25%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, var(--ochre) 25%, transparent);
-  }
-  a.crag-tag:hover { color: var(--ochre); background: color-mix(in srgb, var(--ochre) 20%, transparent); }
-  .partner-tag {
-    background: var(--stone-100);
-    color: var(--stone-700);
-    border: 1px solid var(--rule);
-  }
-  .weather-tag {
-    background: transparent;
-    color: var(--stone-500);
-    border: 1px solid var(--rule);
-  }
+  .entry:first-child { border-top: 1px solid var(--rule); }
+  .entry[data-result="send"]    { border-left-color: var(--moss); }
+  .entry[data-result="project"] { border-left-color: color-mix(in srgb, var(--ochre) 55%, transparent); }
+  .entry[data-result="fail"]    { border-left-color: var(--stone-300); }
+  .entry:hover { background: color-mix(in srgb, var(--ochre) 3%, transparent); }
+  .entry--misc { opacity: 0.45; }
+  .entry--misc:hover { opacity: 0.75; }
+  .entry--upcoming { opacity: 0.55; border-bottom-style: dashed; }
 
-  .card-title {
-    font-family: 'Fraunces', 'Hahmlet', serif;
-    font-size: 1.45rem;
-    font-weight: 400;
-    margin: 0 0 0.8rem;
-    line-height: 1.2;
-  }
-  .card-title a {
-    border: none;
+  /* Date column */
+  .entry-date { text-align: right; padding-top: 0.15rem; }
+  .ed-day {
+    display: block;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1.9rem;
+    font-weight: 600;
     color: var(--ink);
+    line-height: 1;
+    letter-spacing: -0.05em;
+    font-variant-numeric: tabular-nums;
   }
-  .card-title a:hover { color: var(--ochre); }
+  .ed-dow {
+    display: block;
+    font-size: 0.58rem;
+    color: var(--stone-500);
+    letter-spacing: 0.06em;
+    margin-top: 0.25rem;
+  }
+  .ed-mon {
+    display: block;
+    font-size: 0.58rem;
+    color: var(--stone-500);
+    letter-spacing: 0.04em;
+    margin-top: 0.1rem;
+  }
+  /* 암장 타입별 날짜 색상 */
+  .ed-day--multi-pitch { color: #4a9eff; }
+  .ed-day--hard-free   { color: var(--ochre); }
+  .ed-day--gym         { color: var(--stone-700); }
+  /* 타입 레이블 (날짜 아래) */
+  .ed-type {
+    display: block;
+    font-size: 0.46rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 0.35rem;
+    text-align: right;
+    line-height: 1;
+  }
+  .ed-type--mp { color: #4a9eff; }
+  .ed-type--hf { color: var(--ochre); }
 
-  /* 루트 칩 */
-  .route-chips {
-    list-style: none;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    padding: 0;
+  /* Body */
+  .entry-body { min-width: 0; }
+  .entry-meta { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
+
+  .badge-crag, .badge-crew, .badge-misc, .badge-upcoming {
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 0.15em 0.55em;
+    border-radius: 2px;
+    letter-spacing: 0.03em;
   }
-  .route-chip {
+  .badge-crag {
+    background: color-mix(in srgb, var(--ochre) 9%, transparent);
+    color: var(--ochre);
+    border: 1px solid color-mix(in srgb, var(--ochre) 20%, transparent);
+  }
+  a.badge-crag { border-bottom: none; }
+  a.badge-crag:hover { color: var(--ochre); background: color-mix(in srgb, var(--ochre) 15%, transparent); }
+  .badge-crew { background: var(--stone-100); color: var(--stone-700); border: 1px solid var(--rule); }
+  .badge-misc, .badge-upcoming { background: var(--stone-100); color: var(--stone-500); border: 1px solid var(--rule); font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .entry-title {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+    margin: 0 0 0.65rem;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+  }
+  .entry-title a { border: none; color: var(--ink); }
+  .entry-title a:hover { color: var(--ochre); }
+
+  /* Route chips */
+  .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 0.28rem; padding: 0; margin: 0; }
+  .chip {
     display: flex;
     align-items: center;
-    gap: 0.4em;
-    font-size: 0.72rem;
-    padding: 0.25em 0.6em;
+    gap: 0.32em;
+    font-size: 0.67rem;
+    padding: 0.2em 0.5em;
     border: 1px solid;
     border-radius: 2px;
     font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
   }
-  .chip-send { color: var(--moss); border-color: color-mix(in srgb, var(--moss) 40%, transparent); background: color-mix(in srgb, var(--moss) 6%, transparent); }
-  .chip-project { color: var(--ochre); border-color: color-mix(in srgb, var(--ochre) 35%, transparent); background: color-mix(in srgb, var(--ochre) 5%, transparent); }
-  .chip-fail { color: var(--stone-500); border-color: var(--rule); background: transparent; }
-  .chip-more { color: var(--stone-500); border-color: var(--rule); background: transparent; }
-  .chip-name { font-family: Pretendard, sans-serif; font-weight: 500; }
-  .chip-grade { opacity: 0.7; }
-  .chip-status { font-weight: 600; letter-spacing: 0.08em; }
+  .chip-send    { color: var(--moss); border-color: color-mix(in srgb, var(--moss) 35%, transparent); background: color-mix(in srgb, var(--moss) 5%, transparent); }
+  .chip-project { color: var(--ochre); border-color: color-mix(in srgb, var(--ochre) 30%, transparent); background: color-mix(in srgb, var(--ochre) 4%, transparent); }
+  .chip-fail    { color: var(--stone-500); border-color: var(--rule); background: transparent; }
+  .chip-more    { color: var(--stone-500); border-color: var(--rule); background: transparent; }
+  .chip-name    { font-family: 'Spoqa Han Sans Neo', sans-serif; font-weight: 500; font-size: 0.7rem; }
+  .chip-grade   { opacity: 0.6; }
+  .chip-st      { font-weight: 600; letter-spacing: 0.07em; }
 
-  /* 결과 배지 */
-  .card-result {
-    padding-top: 0.3rem;
-    text-align: right;
-    flex-shrink: 0;
-  }
-  .result-send {
-    font-family: 'Fraunces', serif;
+  /* Result column */
+  .entry-result { padding-top: 0.15rem; text-align: right; flex-shrink: 0; }
+  .res-send {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
     font-size: 1.6rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--moss);
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     line-height: 1;
-    gap: 0.15rem;
+    gap: 0.12rem;
+    letter-spacing: -0.04em;
   }
-  .result-send small {
+  .res-send small {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.15em;
+    font-size: 0.55rem;
+    letter-spacing: 0.16em;
     color: var(--moss);
-    opacity: 0.7;
+    opacity: 0.6;
   }
-  .result-proj {
+  .res-proj {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
     color: var(--ochre);
-    padding: 0.25em 0.5em;
-    border: 1px solid color-mix(in srgb, var(--ochre) 35%, transparent);
-  }
-  .result-upcoming {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.15em;
-    color: var(--stone-500);
-    padding: 0.25em 0.5em;
-    border: 1px dashed var(--stone-300);
+    padding: 0.22em 0.45em;
+    border: 1px solid color-mix(in srgb, var(--ochre) 32%, transparent);
   }
 
+  .mono { font-family: 'JetBrains Mono', monospace; }
   .empty-msg {
     text-align: center;
-    padding: 4rem 0;
+    padding: 5rem 0;
     color: var(--stone-500);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     letter-spacing: 0.1em;
   }
 
-  @media (max-width: 640px) {
-    .page-head { flex-direction: column; align-items: flex-start; }
-    .head-stats { gap: 1.5rem; }
-    .log-card { grid-template-columns: 52px 1fr; gap: 1rem; padding: 1.4rem 0; }
-    .card-result { display: none; }
-    .date-md { font-size: 0.85rem; }
-    .card-title { font-size: 1.2rem; }
+  @media (max-width: 720px) {
+    .page-hd { padding: 3rem 1.25rem 2.5rem; }
+    .page-hd-inner { flex-direction: column; align-items: flex-start; }
+    .phd-stats { gap: 1.5rem; }
+    .filter-bar { padding: 0.6rem 1.25rem; top: 87px; }
+    .fpill { min-height: 36px; display: inline-flex; align-items: center; }
+    .log-outer { padding: 0 1.25rem; }
+    .entry { grid-template-columns: 44px 1fr auto; gap: 0.75rem 0.5rem; padding-left: 0.6rem; }
+    .res-send { font-size: 1.1rem; }
+    .res-send small { font-size: 0.48rem; }
+    .res-proj { font-size: 0.58rem; }
+    .ed-day { font-size: 1.5rem; }
+    .entry-title { font-size: 1.1rem; }
   }
 </style>
 </BaseLayout>

@@ -5,6 +5,7 @@ export interface Props {
   hero?: boolean;
 }
 const { title, description = '암벽등반 기록과 위키', hero = false } = Astro.props;
+const { pathname } = Astro.url;
 ---
 <!DOCTYPE html>
 <html lang="ko">
@@ -17,151 +18,198 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hahmlet:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/spoqa/spoqa-han-sans@latest/css/SpoqaHanSansNeo.min.css" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+<link rel="alternate" type="application/rss+xml" title="Summit Log — 등반 로그" href="/rss.xml" />
 
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js" is:inline></script>
 
 <style is:global>
+  /* ════════════════════════════════════════════════════
+     DESIGN TOKENS — Obsidian Dark
+  ════════════════════════════════════════════════════ */
   :root {
-    --ink: #18160f;
-    --ink-soft: #2d2a24;
-    --stone-900: #3a3731;
-    --stone-700: #5c5850;
-    --stone-500: #8a857a;
-    --stone-300: #c4beb0;
-    --stone-200: #d9d3c4;
-    --stone-100: #ece7d8;
-    --paper: #f5f0e8;
-    --paper-soft: #ece7d5;
-    --moss: #3d5c2e;
-    --moss-dark: #263d1e;
-    --ochre: #c0440e;
-    --rule: rgba(24, 22, 15, 0.12);
-    --rule-strong: rgba(24, 22, 15, 0.28);
+    /* Surfaces */
+    --paper:       #080808;
+    --paper-soft:  #0f0f0f;
+    --paper-card:  #161616;
+
+    /* Text */
+    --ink:         #f0f0f0;
+    --ink-soft:    #b8b8b8;
+    --stone-900:   #d8d8d8;
+    --stone-700:   #a0a0a0;
+    --stone-500:   #6a6a6a;
+    --stone-300:   #383838;
+    --stone-200:   #252525;
+    --stone-100:   #1a1a1a;
+
+    /* Accent */
+    --ochre:       #00e87a;   /* electric lime — primary accent */
+    --moss:        #00e87a;   /* electric lime — sends / success */
+    --moss-dark:   #00a055;
+    --amber:       #ff9f2e;   /* orange — projects / warning */
+
+    /* Dark */
+    --void:        #000000;   /* true black */
+
+    /* Rules */
+    --rule:        rgba(255,255,255,0.06);
+    --rule-strong: rgba(255,255,255,0.11);
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --ink: #ece7d5;
-      --ink-soft: #d9d3c4;
-      --stone-900: #c4beb0;
-      --stone-700: #a39e8f;
-      --stone-500: #7a7568;
-      --stone-300: #4a463f;
-      --stone-200: #3a3731;
-      --stone-100: #2d2a24;
-      --paper: #18160f;
-      --paper-soft: #201e17;
-      --moss: #8ea775;
-      --moss-dark: #a8c290;
-      --ochre: #e06030;
-      --rule: rgba(236, 231, 213, 0.12);
-      --rule-strong: rgba(236, 231, 213, 0.28);
-    }
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* ════════════════════════════════════════════════════
+     RESET & BASE
+  ════════════════════════════════════════════════════ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
 
   body {
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Spoqa Han Sans Neo', -apple-system, BlinkMacSystemFont, sans-serif;
     color: var(--ink);
     background: var(--paper);
-    background-image:
-      radial-gradient(circle at 20% 20%, rgba(168, 90, 42, 0.03) 0%, transparent 40%),
-      radial-gradient(circle at 80% 60%, rgba(74, 93, 58, 0.04) 0%, transparent 50%);
     line-height: 1.65;
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  body::before {
+  /* Film grain texture */
+  body::after {
     content: '';
     position: fixed;
     inset: 0;
     pointer-events: none;
-    opacity: 0.35;
-    z-index: 1;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.1 0 0 0 0 0.1 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.04;
+    z-index: 9999;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
   }
 
   a {
     color: inherit;
     text-decoration: none;
     border-bottom: 1px solid var(--rule-strong);
-    transition: border-color 0.2s, color 0.2s;
+    transition: border-color 0.18s, color 0.18s;
   }
   a:hover { border-bottom-color: var(--ochre); color: var(--ochre); }
 
   h1, h2, h3, h4 {
-    font-family: 'Fraunces', 'Hahmlet', Georgia, serif;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
     font-weight: 400;
-    letter-spacing: -0.02em;
-    line-height: 1.15;
+    letter-spacing: -0.025em;
+    line-height: 1.12;
   }
-  h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); font-weight: 500; }
-  h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); margin-top: 3rem; margin-bottom: 1rem; }
+  h1 { font-size: clamp(2.4rem, 5.5vw, 4rem); font-weight: 500; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); margin-top: 3rem; margin-bottom: 1rem; }
   h3 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; }
 
+  /* ════════════════════════════════════════════════════
+     NAVIGATION
+  ════════════════════════════════════════════════════ */
   .masthead {
     position: sticky;
     top: 0;
-    z-index: 50;
-    border-bottom: 1px solid var(--rule);
-    backdrop-filter: blur(10px);
-    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    z-index: 100;
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  .masthead-stripe {
+    height: 2.5px;
+    background: var(--ochre);
   }
   .masthead-inner {
-    max-width: 1200px;
+    max-width: 1240px;
     margin: 0 auto;
-    padding: 1.25rem 2rem;
-    display: grid;
-    grid-template-columns: auto 1fr;
+    padding: 0 2rem;
+    height: 54px;
+    display: flex;
     align-items: center;
-    gap: 2rem;
+    gap: 3rem;
   }
   .brand {
-    font-family: 'Fraunces', serif;
-    font-weight: 500;
-    font-size: 1.1rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    border: none;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.05em;
     color: var(--ink);
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    flex-shrink: 0;
+    margin-right: auto;
   }
   .brand:hover { color: var(--ink); border: none; }
   .brand-mark {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     background: var(--ochre);
-    margin-right: 0.6em;
     transform: rotate(45deg);
-    vertical-align: middle;
-    position: relative;
-    top: -2px;
+    flex-shrink: 0;
+    margin-right: 0.1em;
+  }
+  .brand em {
+    
+    font-weight: 400;
+    color: var(--ochre);
   }
   .nav-links {
     display: flex;
-    gap: 2rem;
-    font-family: Pretendard, sans-serif;
-    font-size: 0.82rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-weight: 500;
-    justify-self: start;
+    align-items: center;
+    gap: 0.1rem;
   }
   .nav-links a {
-    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: var(--stone-700);
-    padding-bottom: 2px;
-    border-bottom: 1px solid transparent;
+    border: none;
+    padding: 0.4em 0.8em;
+    border-radius: 3px;
+    transition: color 0.15s, background 0.15s;
+    font-weight: 400;
   }
-  .nav-links a:hover { color: var(--ink); border-bottom-color: var(--ochre); }
-
+  .nav-links a:hover {
+    color: var(--ink);
+    background: var(--stone-100);
+  }
+  .nav-links a.active {
+    color: var(--ochre);
+    background: rgba(0, 232, 122, 0.08);
+    font-weight: 500;
+  }
+  .nav-links a.active::before {
+    content: '·';
+    color: var(--ochre);
+    margin-right: 0.35em;
+    font-weight: 700;
+  }
+  .nav-admin {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    border: 1px solid var(--rule-strong) !important;
+    padding: 0.3em 0.65em;
+    border-radius: 2px;
+    margin-left: 1rem;
+    transition: color 0.15s, border-color 0.15s !important;
+    flex-shrink: 0;
+  }
+  .nav-admin:hover { color: var(--ink) !important; border-color: var(--stone-500) !important; }
 
   main { position: relative; z-index: 2; }
+
+  /* ════════════════════════════════════════════════════
+     LAYOUT UTILITIES
+  ════════════════════════════════════════════════════ */
   .container {
     max-width: 760px;
     margin: 0 auto;
@@ -173,23 +221,30 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
     padding: 4rem 2rem 6rem;
   }
 
+  /* ════════════════════════════════════════════════════
+     TYPOGRAPHY UTILITIES
+  ════════════════════════════════════════════════════ */
   .eyebrow {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--stone-500);
     display: inline-flex;
     align-items: center;
     gap: 0.7em;
-    margin-bottom: 1.2rem;
+    margin-bottom: 1rem;
   }
   .eyebrow::before {
     content: '';
-    width: 24px;
+    display: inline-block;
+    width: 18px;
     height: 1px;
     background: var(--ochre);
+    flex-shrink: 0;
   }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
 
   hr.rule {
     border: 0;
@@ -203,7 +258,7 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
     background: var(--rule);
     margin: 4rem auto;
     position: relative;
-    max-width: 60%;
+    max-width: 50%;
   }
   hr.rule-ornate::after {
     content: '◆';
@@ -214,85 +269,164 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
     background: var(--paper);
     padding: 0 0.8em;
     color: var(--stone-500);
-    font-size: 0.7rem;
+    font-size: 0.65rem;
   }
 
-  .meta {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    color: var(--stone-500);
-    text-transform: uppercase;
-  }
-  .meta a { border: none; color: var(--stone-700); }
-  .meta a:hover { color: var(--ochre); }
-
-  .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0; }
+  /* ════════════════════════════════════════════════════
+     TAGS
+  ════════════════════════════════════════════════════ */
+  .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 1rem 0; }
   .tag {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    padding: 0.2em 0.7em;
+    font-size: 0.72rem;
+    padding: 0.2em 0.65em;
     background: var(--stone-100);
     color: var(--stone-700);
     letter-spacing: 0.05em;
     border: 1px solid var(--rule);
   }
 
-  .prose p { margin: 1.2rem 0; }
+  /* ════════════════════════════════════════════════════
+     PROSE
+  ════════════════════════════════════════════════════ */
+  .prose p { margin: 1.2rem 0; color: var(--ink-soft); }
   .prose ul, .prose ol { margin: 1rem 0 1rem 1.5rem; }
-  .prose li { margin: 0.3rem 0; }
-  .prose strong { font-weight: 500; color: var(--ink); }
+  .prose li { margin: 0.3rem 0; color: var(--ink-soft); }
+  .prose strong { font-weight: 700; color: var(--ink); }
+  .prose em {  color: var(--stone-900); }
+  .prose mark {
+    background: color-mix(in srgb, var(--ochre) 15%, transparent);
+    color: var(--ink);
+    padding: 0.05em 0.25em;
+  }
+  .prose code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82em;
+    background: var(--stone-100);
+    color: var(--ink-soft);
+    padding: 0.15em 0.45em;
+    border: 1px solid var(--rule);
+  }
+  .prose pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .prose h2 { color: var(--ink); border-bottom: 1px solid var(--rule); padding-bottom: 0.4rem; }
+  .prose h3 { color: var(--moss); }
+  .prose h4 { font-size: 1rem; font-weight: 500; color: var(--stone-700); margin-top: 1.5rem; margin-bottom: 0.4rem; }
   .prose blockquote {
     border-left: 3px solid var(--ochre);
     padding: 0.5rem 0 0.5rem 1.5rem;
     margin: 2rem 0;
-    font-family: 'Fraunces', serif;
-    font-style: italic;
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    
     font-size: 1.15rem;
     color: var(--stone-900);
   }
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.8rem 0;
+    font-size: 0.9rem;
+    overflow-x: auto;
+    display: block;
+  }
+  .prose thead th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--stone-500);
+    background: var(--paper-soft);
+    border-top: 2px solid var(--ochre);
+    border-bottom: 1px solid var(--rule-strong);
+    padding: 0.6rem 1rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .prose tbody tr { border-bottom: 1px solid var(--rule); transition: background 0.12s; }
+  .prose tbody tr:last-child { border-bottom: none; }
+  .prose tbody tr:hover { background: color-mix(in srgb, var(--ochre) 4%, transparent); }
+  .prose td { padding: 0.6rem 1rem; vertical-align: top; color: var(--ink-soft); }
 
+  /* ════════════════════════════════════════════════════
+     FOOTER
+  ════════════════════════════════════════════════════ */
   footer {
     position: relative;
     z-index: 2;
     border-top: 1px solid var(--rule);
     margin-top: 6rem;
-    padding: 3rem 2rem;
+    padding: 2.5rem 2rem;
     background: var(--paper-soft);
   }
   .footer-inner {
-    max-width: 1200px;
+    max-width: 1240px;
     margin: 0 auto;
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     flex-wrap: wrap;
     gap: 1rem;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
+    font-size: 0.68rem;
     color: var(--stone-500);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
   }
 
+  /* ════════════════════════════════════════════════════
+     RESPONSIVE
+  ════════════════════════════════════════════════════ */
   @media (max-width: 720px) {
-    .masthead-inner { grid-template-columns: 1fr; gap: 1rem; }
-    .nav-links { flex-wrap: wrap; gap: 1rem; }
+    .masthead-inner {
+      height: auto;
+      flex-wrap: wrap;
+      gap: 0;
+      padding: 0 1.25rem;
+    }
+    .brand { height: 44px; }
+    .nav-links {
+      flex-basis: 100%;
+      border-top: 1px solid var(--rule);
+      gap: 0;
+      height: 40px;
+    }
+    .nav-links a {
+      flex: 1;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      padding: 0;
+      text-align: center;
+      border-radius: 0;
+    }
+    .nav-admin { display: none; }
     .container, .container-wide { padding: 2.5rem 1.25rem 4rem; }
+    .eyebrow { font-size: 0.75rem; }
+  }
+
+  @media (max-width: 374px) {
+    .masthead-inner { padding: 0 1rem; }
+    .container, .container-wide { padding: 2rem 1rem 3rem; }
   }
 </style>
 </head>
 <body>
 
 <header class="masthead">
+  <div class="masthead-stripe"></div>
   <div class="masthead-inner">
-    <a href="/" class="brand"><span class="brand-mark"></span>Summit Log</a>
+    <a href="/" class="brand">
+      <span class="brand-mark"></span>Summit<em>Log</em>
+    </a>
     <nav class="nav-links">
-      <a href="/wiki/">Wiki</a>
-      <a href="/crags/">Crags</a>
-      <a href="/logs/">Logs</a>
-      <a href="/device/">Device</a>
-      <a href="/admin/" target="_blank">Admin</a>
+      <a href="/crags/" class:list={[{ active: pathname.startsWith('/crags') }]}>Crags</a>
+      <a href="/logs/" class:list={[{ active: pathname.startsWith('/logs') }]}>Logs</a>
+      <a href="/stats/" class:list={[{ active: pathname.startsWith('/stats') }]}>Stats</a>
+      <a href="/wiki/" class:list={[{ active: pathname.startsWith('/wiki') }]}>Wiki</a>
+      <a href="/device/" class:list={[{ active: pathname.startsWith('/device') }]}>Device</a>
     </nav>
+    <a href="/admin/" target="_blank" class="nav-admin">Admin ↗</a>
   </div>
 </header>
 
@@ -300,8 +434,8 @@ const { title, description = '암벽등반 기록과 위키', hero = false } = A
 
 <footer>
   <div class="footer-inner">
-    <span>Summit Log · est. {new Date().getFullYear()}</span>
-    <span>Built with Astro · hosted on Netlify</span>
+    <span>◆ Summit Log</span>
+    <span>Built with Astro · Netlify</span>
   </div>
 </footer>
 

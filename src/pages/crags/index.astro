@@ -7,134 +7,682 @@ crags.sort((a, b) => a.data.title.localeCompare(b.data.title, 'ko'));
 
 const allLogs = await getCollection('logs');
 
-const cragData = crags.map(crag => {
-  const logCount = allLogs.filter(l => l.data.crag === crag.slug).length;
-  return { crag, logCount };
-});
-
-// 산별 그루핑: mountain 있는 것은 묶고, 없는 것은 단독
-const mountainMap = new Map<string, typeof cragData>();
-const standalone: typeof cragData = [];
-for (const item of cragData) {
-  const m = item.crag.data.mountain;
-  if (m) {
-    if (!mountainMap.has(m)) mountainMap.set(m, []);
-    mountainMap.get(m)!.push(item);
-  } else {
-    standalone.push(item);
+const cragLogCount = new Map<string, number>();
+for (const log of allLogs) {
+  if (log.data.crag) {
+    const key = log.data.crag.normalize('NFC');
+    cragLogCount.set(key, (cragLogCount.get(key) ?? 0) + 1);
   }
 }
-const groups: { label: string | null; items: typeof cragData }[] = [
-  ...[...mountainMap.entries()].map(([label, items]) => ({ label, items })),
-  ...standalone.map(item => ({ label: null, items: [item] })),
-];
+
+const cragItems = crags.map(crag => {
+  const rawKey = crag.id.replace(/\.md$/, '').split('/').pop()!;
+  const key = rawKey.normalize('NFC');
+  const slug = crag.slug ?? rawKey;
+  const logCount = cragLogCount.get(key) ?? 0;
+  return { crag, slug, logCount };
+});
+
+// ── 3 카테고리 분리 ──
+const multiPitchItems = cragItems.filter(i => i.crag.data.crag_type.includes('multi-pitch'));
+const hardFreeItems   = cragItems.filter(i => i.crag.data.crag_type.includes('hard-free'));
+const gymItems        = cragItems.filter(i => i.crag.data.crag_type.includes('gym'));
+const indoorItems     = gymItems.filter(i => !i.crag.data.crag_type.includes('outdoor-wall'));
+const outdoorWallItems = gymItems.filter(i => i.crag.data.crag_type.includes('outdoor-wall'));
+
+// mountain 기준 그루핑 헬퍼
+type CragItem = typeof cragItems[number];
+function groupByMountain(items: CragItem[]) {
+  const map = new Map<string, CragItem[]>();
+  const standalone: CragItem[] = [];
+  for (const item of items) {
+    const m = item.crag.data.mountain;
+    if (m) {
+      if (!map.has(m)) map.set(m, []);
+      map.get(m)!.push(item);
+    } else {
+      standalone.push(item);
+    }
+  }
+  return { groups: [...map.entries()], standalone };
+}
+
+const mpGroups = groupByMountain(multiPitchItems);
+const hfGroups = groupByMountain(hardFreeItems);
+
+// 통계
+const totalRoutes = crags.reduce((s, c) => s + c.data.routes.length, 0);
+const totalVisits = [...cragLogCount.values()].reduce((a, b) => a + b, 0);
+
+// 암장별 최고 완등 그레이드 (로그 데이터에서 파생)
+function parseGN(g: string | null | undefined): number {
+  if (!g) return -1;
+  const m = g.match(/5\.(\d+)([a-dA-D]?)/i);
+  if (!m) return -1;
+  const sub = m[2] ? ({a:0,b:1,c:2,d:3}[m[2].toLowerCase() as 'a'|'b'|'c'|'d'] ?? 0) : 0;
+  return parseInt(m[1], 10) * 4 + sub;
+}
+const sendStatuses = new Set(['onsight', 'flash', 'redpoint', 'send']);
+const cragBestGradeMap = new Map<string, string>();
+for (const log of allLogs) {
+  if (!log.data.crag) continue;
+  const key = log.data.crag.normalize('NFC');
+  for (const r of log.data.routes) {
+    if (!sendStatuses.has(r.status) || !r.grade) continue;
+    const gn = parseGN(r.grade);
+    const cur = cragBestGradeMap.get(key);
+    if (gn >= 0 && (!cur || gn > parseGN(cur))) cragBestGradeMap.set(key, r.grade);
+  }
+}
+const getCragBestGrade = (slug: string) => cragBestGradeMap.get(slug.normalize('NFC')) ?? null;
+
+// 지도 마커 (카테고리별 색상)
+const mapMarkers = cragItems
+  .filter(i => i.crag.data.location?.lat)
+  .map(i => ({
+    lat: i.crag.data.location!.lat,
+    lng: i.crag.data.location!.lng,
+    title: i.crag.data.title,
+    url: `/crags/${i.slug}/`,
+    visits: i.logCount,
+    category: i.crag.data.crag_type.includes('multi-pitch') ? 'multi-pitch'
+      : i.crag.data.crag_type.includes('hard-free') ? 'hard-free'
+      : i.crag.data.crag_type.includes('gym') ? 'gym'
+      : 'other',
+  }));
+
+const DISC_SHORT: Record<string, string> = {
+  trad: 'Trad', sport: 'Sport', boulder: 'Boulder', 'multi-pitch': 'Multi',
+  aid: 'Aid', ice: 'Ice', mixed: 'Mix',
+};
 ---
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <BaseLayout title="암장">
-<div class="container">
+<div class="crags-root">
 
-  <div class="eyebrow">Crags — 암장</div>
-  <h1>내가 오른 <em>바위들.</em></h1>
+  <!-- ══════════════════════════════ HEADER ══ -->
+  <div class="page-hd">
+    <div class="hd-inner">
+      <div class="s-eyebrow">Crags</div>
+      <h1>내가 오른 <em>바위들.</em></h1>
+      <div class="hd-meta mono">
+        {crags.length}개 암장 &middot; {totalRoutes}개 루트 &middot; {totalVisits}회 방문
+      </div>
+    </div>
+  </div>
 
-  <div class="crag-groups">
-    {groups.map(({ label, items }) => (
-      <div class="crag-group">
-        {label && <div class="mountain-label">{label}</div>}
-        <ul class="crag-list">
-          {items.map(({ crag, logCount }) => (
-            <li>
-              <a href={`/crags/${crag.slug}/`} class="crag-row">
-                <div class="crag-left">
-                  <span class="crag-title">{crag.data.title}</span>
-                  {crag.data.summary && <span class="crag-summary">{crag.data.summary}</span>}
+  <!-- ════════════════════════════════ MAP ══ -->
+  <div class="map-section">
+    <div id="crags-map"></div>
+  </div>
+
+  <!-- ══════════════════════ 카테고리 앵커 탭 ══ -->
+  <nav class="cat-nav">
+    <a href="#multi-pitch" class="cat-tab">멀티피치</a>
+    <a href="#hard-free" class="cat-tab">하드프리</a>
+    <a href="#gym" class="cat-tab">인공암장</a>
+  </nav>
+
+  <!-- ══════════════════════════ MULTI-PITCH ══ -->
+  <section class="cat-section" id="multi-pitch">
+    <div class="section-inner">
+      <div class="cat-hd">
+        <div class="cat-eyebrow">Multi-pitch</div>
+        <h2 class="cat-title">멀티피치</h2>
+        <p class="cat-desc">여러 피치를 이어 오르는 자연암장. 산별로 정리된 루트 목록.</p>
+      </div>
+
+      {[...mpGroups.groups.map(([label, items]) => ({ label, items })),
+         ...mpGroups.standalone.map(item => ({ label: null, items: [item] }))
+      ].map(({ label, items }) => (
+        <div class="mgroup">
+          {label && (
+            <div class="mhd">
+              <span class="mhd-name">{label}</span>
+              <span class="mhd-ct mono">{items.length}개 암장</span>
+            </div>
+          )}
+          <div class="mp-grid">
+            {items.map(({ crag, slug, logCount }) => {
+              const routes = crag.data.routes ?? [];
+              const showRoutes = routes.slice(0, 5);
+              const extra = routes.length - showRoutes.length;
+              return (
+                <a href={`/crags/${slug}/`} class="mp-card">
+                  {logCount > 0 && <div class="ccard-visits mono">{logCount}회</div>}
+                  <div class="mp-card-title">{crag.data.title}</div>
+                  {crag.data.summary && <p class="mp-card-summary">{crag.data.summary}</p>}
+                  {showRoutes.length > 0 ? (
+                    <ul class="mp-route-list">
+                      {showRoutes.map(r => {
+                        const pitchCount = (r.pitches?.length > 0 ? r.pitches.length : 0) || (r.pitches_count ?? 0);
+                        return (
+                          <li class="mp-route-item">
+                            <span class="mp-rname">{r.name ?? r.id}</span>
+                            {r.grade && <span class="mp-rgrade mono">{r.grade}</span>}
+                            {pitchCount > 0 && <span class="mp-rpitch mono">{pitchCount}P</span>}
+                          </li>
+                        );
+                      })}
+                      {extra > 0 && <li class="mp-route-more mono">+{extra}개 더</li>}
+                    </ul>
+                  ) : (
+                    <p class="mp-route-empty">루트 정보 추가 예정</p>
+                  )}
+                  <div class="mp-card-foot">
+                    {crag.data.disciplines.slice(0,3).map(d => (
+                      <span class="disc">{DISC_SHORT[d] ?? d}</span>
+                    ))}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════ HARD-FREE ══ -->
+  <section class="cat-section cat-section-tinted" id="hard-free">
+    <div class="section-inner">
+      <div class="cat-hd">
+        <div class="cat-eyebrow">Hard Free</div>
+        <h2 class="cat-title">하드프리</h2>
+        <p class="cat-desc">단피치 스포츠·트래드 중심의 자연암장. 산별 섹터 구성.</p>
+      </div>
+
+      {[...hfGroups.groups.map(([label, items]) => ({ label, items })),
+         ...hfGroups.standalone.map(item => ({ label: null, items: [item] }))
+      ].map(({ label, items }) => (
+        <div class="mgroup">
+          {label && (
+            <div class="mhd">
+              <span class="mhd-name">{label}</span>
+              <span class="mhd-ct mono">{items.length}개 섹터</span>
+            </div>
+          )}
+          <div class="crag-grid">
+            {items.map(({ crag, slug, logCount }) => {
+              const bestGrade = getCragBestGrade(slug);
+              return (
+                <a href={`/crags/${slug}/`} class="ccard">
+                  {logCount > 0 && <div class="ccard-visits mono">{logCount}회</div>}
+                  <div class="ccard-body">
+                    <h3 class="ccard-title">{crag.data.title}</h3>
+                    {crag.data.summary && <p class="ccard-summary">{crag.data.summary}</p>}
+                  </div>
+                  <div class="ccard-foot">
+                    <div class="ccard-discs">
+                      {crag.data.disciplines.slice(0,3).map(d => (
+                        <span class="disc">{DISC_SHORT[d] ?? d}</span>
+                      ))}
+                    </div>
+                    <div class="ccard-stats mono">
+                      {bestGrade && <span class="ccard-best">{bestGrade}</span>}
+                      {crag.data.routes.length > 0 && <span>{crag.data.routes.length}R</span>}
+                      {crag.data.approach_minutes && <span>{crag.data.approach_minutes}분</span>}
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ GYM ══ -->
+  <section class="cat-section" id="gym">
+    <div class="section-inner">
+      <div class="cat-hd">
+        <div class="cat-eyebrow">Gym</div>
+        <h2 class="cat-title">인공암장</h2>
+        <p class="cat-desc">실내 클라이밍짐과 외벽 시설.</p>
+      </div>
+
+      {indoorItems.length > 0 && (
+        <div class="mgroup">
+          <div class="mhd">
+            <span class="mhd-name">실내 암장</span>
+            <span class="mhd-ct mono">{indoorItems.length}개 지점</span>
+          </div>
+          <div class="crag-grid">
+            {indoorItems.map(({ crag, slug, logCount }) => (
+              <a href={`/crags/${slug}/`} class="ccard">
+                {logCount > 0 && <div class="ccard-visits mono">{logCount}회</div>}
+                <div class="ccard-body">
+                  <h3 class="ccard-title">{crag.data.title}</h3>
+                  {crag.data.summary && <p class="ccard-summary">{crag.data.summary}</p>}
                 </div>
-                <div class="crag-right">
-                  {crag.data.location && (
-                    <span class="crag-region mono">{crag.data.location.region}</span>
-                  )}
-                  {crag.data.routes.length > 0 && (
-                    <span class="crag-routes mono">{crag.data.routes.length}R</span>
-                  )}
-                  {logCount > 0 && (
-                    <span class="crag-logs mono">{logCount}회</span>
-                  )}
-                  {crag.data.rock_type && (
-                    <span class="crag-rock">{crag.data.rock_type}</span>
-                  )}
+                <div class="ccard-foot">
+                  <div class="ccard-discs">
+                    {crag.data.disciplines.slice(0,3).map(d => (
+                      <span class="disc">{DISC_SHORT[d] ?? d}</span>
+                    ))}
+                  </div>
+                  <div class="ccard-stats mono">
+                    {crag.data.location?.city && <span>{crag.data.location.city}</span>}
+                  </div>
                 </div>
               </a>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div class="mgroup">
+        <div class="mhd">
+          <span class="mhd-name">외벽</span>
+          <span class="mhd-ct mono">{outdoorWallItems.length > 0 ? `${outdoorWallItems.length}개 지점` : '추가 예정'}</span>
+        </div>
+        {outdoorWallItems.length > 0 ? (
+          <div class="crag-grid">
+            {outdoorWallItems.map(({ crag, slug, logCount }) => (
+              <a href={`/crags/${slug}/`} class="ccard">
+                {logCount > 0 && <div class="ccard-visits mono">{logCount}회</div>}
+                <div class="ccard-body">
+                  <h3 class="ccard-title">{crag.data.title}</h3>
+                  {crag.data.summary && <p class="ccard-summary">{crag.data.summary}</p>}
+                </div>
+                <div class="ccard-foot">
+                  <div class="ccard-discs">
+                    {crag.data.disciplines.slice(0,3).map(d => (
+                      <span class="disc">{DISC_SHORT[d] ?? d}</span>
+                    ))}
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div class="empty-placeholder">
+            <span class="mono">등록된 외벽 암장이 없습니다</span>
+          </div>
+        )}
       </div>
-    ))}
-  </div>
+    </div>
+  </section>
 
 </div>
 
 <style>
-  h1 {
-    font-family: 'Fraunces', 'Hahmlet', serif;
-    font-weight: 400;
-    line-height: 1.05;
-    margin-bottom: 2.5rem;
-  }
-  h1 em { font-style: italic; color: var(--ochre); }
+  .crags-root { min-height: 100vh; padding-bottom: 6rem; }
 
-  .crag-groups { display: flex; flex-direction: column; gap: 2.5rem; }
-  .crag-group {}
-  .mountain-label {
+  /* ── HEADER ── */
+  .page-hd {
+    padding: 4.5rem 2rem 3.5rem;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  .hd-inner { max-width: 1100px; margin: 0 auto; }
+  .s-eyebrow {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.18em;
+    font-size: 0.65rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--stone-500);
-    margin-bottom: 0.4rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-bottom: 0.8rem;
   }
-  .crag-list { list-style: none; margin: 0; padding: 0; }
-  .crag-row {
+  .s-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 16px; height: 1px;
+    background: var(--ochre);
+  }
+  h1 {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    margin: 0 0 1rem;
+  }
+  h1 em { color: var(--ochre); font-weight: 300; }
+  .hd-meta { font-size: 0.72rem; color: var(--stone-500); letter-spacing: 0.06em; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── MAP ── */
+  .map-section { border-bottom: 1px solid var(--rule-strong); }
+  #crags-map { height: 300px; width: 100%; background: var(--paper-soft); }
+
+  /* ── CATEGORY NAV ── */
+  .cat-nav {
+    display: flex;
+    border-bottom: 1px solid var(--rule-strong);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper);
+  }
+  .cat-tab {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    text-decoration: none;
+    padding: 0.85rem 1.8rem;
+    border-right: 1px solid var(--rule-strong);
+    transition: color 0.12s, background 0.12s;
+  }
+  .cat-tab:hover {
+    color: var(--ochre);
+    background: color-mix(in srgb, var(--ochre) 4%, var(--paper));
+  }
+
+  /* ── SECTION ── */
+  .cat-section { border-bottom: 1px solid var(--rule-strong); }
+  .cat-section-tinted { background: var(--paper-soft); }
+  .section-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 3.5rem 2rem 4rem;
+  }
+
+  /* ── CATEGORY HEADER ── */
+  .cat-hd { margin-bottom: 3rem; }
+  .cat-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--stone-500);
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-bottom: 0.5rem;
+  }
+  .cat-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 14px; height: 1px;
+    background: var(--ochre);
+  }
+  .cat-title {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    margin: 0 0 0.4rem;
+    color: var(--ink);
+  }
+  .cat-desc { font-size: 0.82rem; color: var(--stone-500); margin: 0; }
+
+  /* ── MOUNTAIN GROUP ── */
+  .mgroup { margin-bottom: 3rem; }
+  .mgroup:last-child { margin-bottom: 0; }
+  .mhd {
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    padding: 0.7rem 1rem;
+    background: var(--paper-soft);
+    border: 1px solid var(--rule-strong);
+    border-left: 3px solid var(--ochre);
+    margin-bottom: 1px;
+  }
+  .mhd-name {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .mhd-ct { font-size: 0.62rem; color: var(--stone-500); letter-spacing: 0.08em; }
+
+  /* ── HARD-FREE / GYM CRAG GRID ── */
+  .crag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1px;
+    background: var(--rule-strong);
+    border: 1px solid var(--rule-strong);
+  }
+  .ccard {
+    background: var(--paper-card);
+    padding: 1.3rem 1.4rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    color: var(--ink);
+    position: relative;
+    transition: background 0.12s;
+    min-height: 120px;
+    text-decoration: none;
+  }
+  .ccard:hover { background: color-mix(in srgb, var(--ochre) 4%, var(--paper-card)); }
+  .ccard-visits {
+    position: absolute;
+    top: 0.9rem;
+    right: 1rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    color: var(--ochre);
+    background: color-mix(in srgb, var(--ochre) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ochre) 22%, transparent);
+    padding: 0.12em 0.45em;
+    border-radius: 2px;
+  }
+  .ccard-body { flex: 1; }
+  .ccard-title {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    margin: 0 2rem 0 0;
+  }
+  .ccard-summary {
+    font-size: 0.75rem;
+    color: var(--stone-700);
+    margin-top: 0.25rem;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ccard-foot {
+    margin-top: auto;
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
-    gap: 1rem;
-    padding: 1.1rem 0.5rem;
-    border-bottom: 1px solid var(--rule);
-    border-top: none;
-    color: var(--ink);
-    transition: background 0.15s, padding 0.15s;
+    align-items: center;
+    border-top: 1px solid var(--rule);
+    padding-top: 0.6rem;
   }
-  .crag-list li:first-child .crag-row { border-top: 1px solid var(--rule); }
-  .crag-row:hover { padding-left: 1rem; background: color-mix(in srgb, var(--ochre) 4%, transparent); color: var(--ink); }
-
-  .crag-left { min-width: 0; }
-  .crag-title {
-    font-family: 'Hahmlet', 'Fraunces', serif;
-    font-size: 1.15rem;
-    font-weight: 400;
-    display: block;
+  .ccard-discs { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+  .ccard-stats {
+    display: flex;
+    gap: 0.6rem;
+    font-size: 0.62rem;
+    color: var(--stone-500);
   }
-  .crag-summary {
-    display: block;
-    font-size: 0.82rem;
+  .ccard-best {
+    color: var(--ochre);
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .disc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.12em 0.45em;
+    border: 1px solid var(--rule-strong);
     color: var(--stone-700);
-    margin-top: 0.15rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 400px;
+    border-radius: 2px;
+    background: var(--paper);
   }
+  .ccard::after {
+    content: '→';
+    position: absolute;
+    bottom: 0.9rem;
+    right: 1rem;
+    font-size: 0.7rem;
+    color: var(--ochre);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .ccard:hover::after { opacity: 1; transform: translateX(0); }
 
-  .crag-right {
+  /* ── MULTI-PITCH CARDS ── */
+  .mp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1px;
+    background: var(--rule-strong);
+    border: 1px solid var(--rule-strong);
+  }
+  .mp-card {
+    background: var(--paper-card);
+    padding: 1.4rem 1.5rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    color: var(--ink);
+    position: relative;
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .mp-card:hover { background: color-mix(in srgb, var(--ochre) 4%, var(--paper-card)); }
+  .mp-card-title {
+    font-family: 'Spoqa Han Sans Neo', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 0 2rem 0 0;
+    color: var(--ink);
+  }
+  .mp-card-summary {
+    font-size: 0.75rem;
+    color: var(--stone-500);
+    margin: 0;
+    line-height: 1.4;
+  }
+  .mp-route-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--rule);
+    padding-top: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .mp-route-item {
     display: flex;
     align-items: baseline;
-    gap: 1rem;
-    flex-shrink: 0;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--stone-700);
   }
-  .mono { font-family: 'JetBrains Mono', monospace; }
-  .crag-region { font-size: 0.75rem; color: var(--stone-500); }
-  .crag-routes { font-size: 0.75rem; color: var(--moss); }
-  .crag-logs { font-size: 0.75rem; color: var(--stone-500); }
-  .crag-rock { font-size: 0.75rem; color: var(--stone-500); }
+  .mp-route-item::before { content: '·'; color: var(--ochre); flex-shrink: 0; }
+  .mp-rname { flex: 1; }
+  .mp-rgrade { font-size: 0.68rem; color: var(--ochre); letter-spacing: 0.04em; }
+  .mp-rpitch { font-size: 0.65rem; color: var(--stone-500); letter-spacing: 0.04em; }
+  .mp-route-more { font-size: 0.65rem; color: var(--stone-500); padding-top: 0.15rem; }
+  .mp-route-empty {
+    font-size: 0.72rem;
+    color: var(--stone-500);
+    margin: 0;
+    font-style: italic;
+    border-top: 1px solid var(--rule);
+    padding-top: 0.6rem;
+  }
+  .mp-card-foot { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+  .mp-card::after {
+    content: '→';
+    position: absolute;
+    bottom: 1rem;
+    right: 1.1rem;
+    font-size: 0.7rem;
+    color: var(--ochre);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .mp-card:hover::after { opacity: 1; transform: translateX(0); }
+
+  /* ── EMPTY PLACEHOLDER ── */
+  .empty-placeholder {
+    border: 1px dashed var(--rule-strong);
+    padding: 2rem;
+    text-align: center;
+    color: var(--stone-500);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 720px) {
+    .page-hd { padding: 3rem 1.25rem 2.5rem; }
+    .section-inner { padding: 2.5rem 1.25rem 3rem; }
+    .crag-grid { grid-template-columns: 1fr 1fr; }
+    .mp-grid { grid-template-columns: 1fr; }
+    .ccard-summary { display: none; }
+    .cat-tab { padding: 0.75rem 1.1rem; font-size: 0.68rem; min-height: 44px; display: inline-flex; align-items: center; }
+    #crags-map { height: 220px; }
+    .mhd-ct { font-size: 0.72rem; }
+  }
+  @media (max-width: 480px) {
+    .crag-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 374px) {
+    .page-hd { padding: 2.5rem 1rem 2rem; }
+    .section-inner { padding: 2rem 1rem 2.5rem; }
+    #crags-map { height: 180px; }
+  }
 </style>
+
+<script define:vars={{ mapMarkers }}>
+function initCragMap() {
+  if (typeof L === 'undefined' || !document.getElementById('crags-map')) return;
+  const map = L.map('crags-map', { scrollWheelZoom: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 17
+  }).addTo(map);
+
+  const colorMap = {
+    'multi-pitch': '#4a9eff',
+    'hard-free': '#b8860b',
+    'gym': '#00e87a',
+    'other': '#888'
+  };
+
+  mapMarkers.forEach(m => {
+    const color = colorMap[m.category] || '#888';
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:10px;height:10px;background:${color};border:2px solid #fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>`,
+      iconSize: [10, 10],
+      iconAnchor: [5, 5]
+    });
+    L.marker([m.lat, m.lng], { icon })
+      .bindPopup(
+        `<div style="font-family:sans-serif;min-width:120px">` +
+        `<a href="${m.url}" style="font-weight:600;font-size:0.95rem;color:#333">${m.title}</a>` +
+        (m.visits ? `<div style="font-size:0.75rem;color:#888;margin-top:2px">${m.visits}회 방문</div>` : '') +
+        `</div>`
+      )
+      .addTo(map);
+  });
+
+  if (mapMarkers.length > 0) {
+    const lats = mapMarkers.map(m => m.lat);
+    const lngs = mapMarkers.map(m => m.lng);
+    map.fitBounds([[Math.min(...lats) - 0.08, Math.min(...lngs) - 0.08],
+                   [Math.max(...lats) + 0.08, Math.max(...lngs) + 0.08]]);
+  }
+}
+
+const leafletScript = document.createElement('script');
+leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+leafletScript.onload = initCragMap;
+document.head.appendChild(leafletScript);
+</script>
 </BaseLayout>
